@@ -1,58 +1,80 @@
-# Template for the HighLoad course
-This project is based on [Tiny Event Sourcing library](https://github.com/andrsuh/tiny-event-sourcing)
+## Case 1
+<hr>
 
-### Run PostgreSql
-This example uses Postgres as an implementation of the Event store. You can see it in `pom.xml`:
+### Что не работало
 
+На графике исходов оплаты можно увидеть, что с определённого момента часть оплат даёт результат CLIENT_TIMEOUT:
+
+![image](images/before/payment_outcome.png)
+
+<br>
+
+Неудачные тесты длятся очень долго:
+
+![image](images/before/tests_info.png)
+
+<br>
+
+Сервис оплаты отказывает некоторым запросам из-за превышения лимита:
+
+![image](images/before/payment_system_rps.png)
+
+<br>
+
+Показатели дохода немного меньше целевых 97/3:
+
+![image](images/before/income.png)
+
+### Почему так происходило
+
+От пользователей запрашивалось 11 оплат в секунду:
+
+![image](images/test.png)
+
+<br> 
+
+В то время как аккаунт ограничивает поток запросов 10 в секунду:
+
+![image](images/acc3.png)
+
+<br>
+
+Сервис магазина при получении запроса от пользователя без каких-либо проверок и условий посылает запрос сервису оплаты со всех аккаунтов (в данном случае только acc-3). Так как от пользователей приходит больше запросов в секунду, чем может обработать сервис оплаты, и эти запросы перенаправляются на него очень быстро, часть обращений магазина к сервису оплаты не проходят с ответом "Rate limit for account: acc-3 breached". Пользователь ждёт 80 секунд, но оплата за это время не завершается успешно (так как мы не пытаемся провести её ещё раз после неудачи), и тесты, на которые пришлись нарушения rate limit, не проходят и длятся как раз около 80 секунд.
+
+### Что именно добавлено/изменено
+
+Я воспользовался реализованным в common.utils rate limiter со скользящим окном и добавил блокировку потока перед обращением к сервису оплаты в случае, если превышен лимит запросов от клиентов магазина в account.rateLimitPerSec за последнюю секунду:
+
+```kotlin
+    private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+
+    override fun performPaymentAsync(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
+        rateLimiter.tickBlocking()
+
+        logger.warn("[$accountName] Submitting payment request for payment $paymentId")
+        ...
 ```
-<dependency>
-    <groupId>ru.quipy</groupId>
-    <artifactId>tiny-postgres-event-store-spring-boot-starter</artifactId>
-    <version>${tiny.es.version}</version>
-</dependency>
-```
 
-Thus, you have to run Postgres in order to test this example. Postgres service is included in  `docker-compose` file that we have in the root of the project.
+### Почему эти изменения исправляют проблему
 
-# More comprehensive information about the course, project, how to run tests is here:
+Теперь при вызове performPaymentAsync, если за последнюю секунду rate limiter уже дал rateLimitPerSec потокам исполняться и слать запрос сервису оплаты, выполнение текущего блокируется, пока rate limiter не выкинет из своей очереди старые записи (те, которые хотя бы на секунду отстают от текущего времени). Таким образом, можно ограничить поток запросов к сервису оплаты значением, указанным в аккаунте.
 
-https://andrsuh.notion.site/2595d535059281d8a815c2cb3875c376?source=copy_link
+<br>
 
-https://andrsuh.notion.site/2625d5350592801aaf88c7c95302d10c?source=copy_link
+При этом запросы обрабатываются в сервисе оплаты в среднем 1 секунду и пользователь готов ждать целых 80 секунд, поэтому они накапливаются медленно, и при значениях из кейса 1 и аккаунта 3 маловероятна ситуация, что поток, обрабатывающий оплату, проведёт в блокировке достаточно времени, чтобы запрос зафейлился с CLIENT_TIMEOUT.
 
-### Run the infrastructure
-Set of the services you need to start developing and testing process is following:
-- Bombardier - service that is in charge of emulation the store's clients activity (creates the incoming load). Also serves as a third-party payment system.
-- Postgres DBMS
-- Prometheus + Grafana - metrics collection and visualization services
+### Результаты после исправления (remote)
 
-You can run all beforementioned services by the following command:
-```
-docker compose -f docker-compose.yml up
-```
+![image](images/after_remote/payment_outcome.png)
 
-### Run the application
-To make the application run you can start the main class `OnlineShopApplication`. It is not being launched as a docker contained to simplify and speed up the devevopment process as it is easier for you to refactor the application and re-run it immediately in the IDE.
+<br>
 
+![image](images/after_remote/tests_info.png)
 
-### If you want to pull changes from the main repository into your fork
+<br>
 
-The command ```git remote -v``` should include the following lines:
+![image](images/after_remote/payment_system_rps.png)
 
-```
-upstream        https://github.com/andrsuh/high-load-course.git (fetch)
-upstream        https://github.com/andrsuh/high-load-course.git (push)
-```
+<br>
 
-If not, add the upstream remote:
-```git remote add upstream https://github.com/andrsuh/high-load-course.git```
-
-To pull changes from the main repository, run the following commands:
-
-```
-git fetch upstream
-# switch to the main branch of your fork. Make sure the branch has no uncommitted changes to avoid conflicts
-git checkout main 
-# merge changes from the main repository into your main branch
-git merge upstream/main 
-```
+![image](images/after_remote/income.png)
