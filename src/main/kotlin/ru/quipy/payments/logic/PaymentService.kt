@@ -37,7 +37,17 @@ data class PaymentAccountProperties(
     val price: Int,
     val averageProcessingTime: Duration = Duration.ofSeconds(11),
     val enabled: Boolean,
-)
+) {
+    override fun toString(): String {
+        return "$accountName:\n" +
+                "serviceName='$serviceName'\n" +
+                "parallelRequests=$parallelRequests\n" +
+                "rateLimitPerSec=$rateLimitPerSec\n" +
+                "price=$price\n" +
+                "averageProcessingTime=$averageProcessingTime\n" +
+                "enabled=$enabled)\n"
+    }
+}
 
 /**
  * Describes response from external service.
