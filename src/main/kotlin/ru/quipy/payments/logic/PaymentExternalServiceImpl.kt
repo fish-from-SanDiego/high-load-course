@@ -40,7 +40,7 @@ class PaymentExternalSystemAdapterImpl(
     private val client = OkHttpClient.Builder().build()
 
     private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
-    private val ongoingRequestsLimiter = OngoingWindow(parallelRequests)
+    private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = true)
 
     override fun performPaymentAsync(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
         ongoingRequestsLimiter.acquire()
@@ -51,8 +51,7 @@ class PaymentExternalSystemAdapterImpl(
 
             val transactionId = UUID.randomUUID()
 
-//            val paymentDeadlinePotentiallyReachable = now() + requestAverageProcessingTime.toMillis() <= deadline
-            val paymentDeadlinePotentiallyReachable = true
+            val paymentDeadlinePotentiallyReachable = now() + requestAverageProcessingTime.toMillis() <= deadline
 
             if (paymentDeadlinePotentiallyReachable) {
                 // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
@@ -69,6 +68,19 @@ class PaymentExternalSystemAdapterImpl(
                 logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
 
                 performRequest(paymentId, transactionId, amount)
+            } else {
+                paymentESService.update(paymentId) {
+                    it.logSubmission(
+                        success = false,
+                        transactionId,
+                        now(),
+                        Duration.ofMillis(now() - paymentStartedAt)
+                    )
+                }
+
+                paymentESService.update(paymentId) {
+                    it.logProcessing(false, now(), transactionId, reason = "Request deadline passed.")
+                }
             }
 
         } finally {

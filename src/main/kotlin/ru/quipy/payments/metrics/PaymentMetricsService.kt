@@ -13,17 +13,17 @@ class PaymentMetricsService(
         .description("Total number of payment http requests received from clients")
         .register(metricsRegistry)
 
-    private val increaseSubmittedPaymentRequestCounter =
-        Counter
-            .builder("http_payment_requests_submitted_fish_from_sd")
-            .description("Total number of payment http requests submitted to payment service")
-            .register(metricsRegistry)
-
     fun increaseReceivedPaymentRequestCounter() =
         increaseReceivedPaymentRequestCounter.increment()
 
-    fun increaseSubmittedPaymentRequestCounter() =
-        increaseSubmittedPaymentRequestCounter.increment()
+    fun increaseSubmittedPaymentRequestCounter(result: String) =
+        Counter
+            .builder("http_payment_requests_submitted_fish_from_sd")
+            .description("Total number of payment http requests submitted to payment service")
+            .tags("result", result)
+            .register(metricsRegistry)
+            .increment()
+
 
     fun increaseProcessedPaymentRequestCounter(result: String) = Counter
         .builder("http_payment_requests_processed_fish_from_sd")

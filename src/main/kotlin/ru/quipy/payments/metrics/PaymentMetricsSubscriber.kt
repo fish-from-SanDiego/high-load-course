@@ -39,7 +39,7 @@ class PaymentMetricsSubscriber {
             }
             `when`(PaymentSubmittedEvent::class) { event ->
                 appExecutor.submit {
-                    metricsService.increaseSubmittedPaymentRequestCounter()
+                    metricsService.increaseSubmittedPaymentRequestCounter(if (event.success) "SUCCESS" else "FAIL")
                 }
             }
         }
