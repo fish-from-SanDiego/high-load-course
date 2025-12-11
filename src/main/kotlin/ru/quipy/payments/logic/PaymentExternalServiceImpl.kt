@@ -7,13 +7,17 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import org.slf4j.LoggerFactory
-import ru.quipy.common.utils.OngoingWindow
-import ru.quipy.common.utils.SlidingWindowRateLimiter
+import ru.quipy.common.utils.*
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
 import java.net.SocketTimeoutException
 import java.time.Duration
 import java.util.*
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import kotlin.math.min
+import kotlin.time.DurationUnit
+import kotlin.time.toKotlinDuration
 
 
 // Advice: always treat time as a Duration
@@ -37,51 +41,90 @@ class PaymentExternalSystemAdapterImpl(
     private val rateLimitPerSec = properties.rateLimitPerSec
     private val parallelRequests = properties.parallelRequests
 
+    private val expectedRps =
+        min(
+            rateLimitPerSec.toDouble(),
+            parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
+        )
+
+    private val paymentExecutor = CountingThreadPoolExecutor(
+        parallelRequests,
+        parallelRequests,
+        0L,
+        TimeUnit.MILLISECONDS,
+        LinkedBlockingQueue(8_000),
+        NamedThreadFactory("payment-external-executor-${accountName}"),
+        CallerBlockingRejectedExecutionHandler()
+    )
+
     private val client = OkHttpClient.Builder().build()
+    private val processingOverheadMillis: Long = 20L
 
     private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = true)
 
-    override fun performPaymentAsync(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
+    override fun performPaymentAsync(
+        paymentId: UUID,
+        amount: Int,
+        paymentStartedAt: Long,
+        deadline: Long
+    ): PaymentSubmissionResult {
+        val transactionId = UUID.randomUUID()
+        val requestsInQueueCount = paymentExecutor.totalTaskCount
+
+//        уже выполняющиеся запросы берутся по верхней границе - как будто они все только начали выполнение
+        val processingTimeBeforeSeconds = (requestsInQueueCount.toDouble() / expectedRps)
+        val totalProcessingTimeMillis =
+            ((processingTimeBeforeSeconds * 1000
+                    + (requestsInQueueCount + 1) * processingOverheadMillis
+                    + requestAverageProcessingTime.toMillis()))
+                .toLong()
+
+        val expectedProcessedTimestamp = now() + totalProcessingTimeMillis
+        if (expectedProcessedTimestamp >= deadline) {
+            logger.warn("[$accountName] Payment not submitted for txId: $transactionId, payment: $paymentId, reason: Too many requests")
+            paymentESService.update(paymentId) {
+                it.logSubmission(
+                    success = false,
+                    transactionId,
+                    now(),
+                    Duration.ofMillis(now() - paymentStartedAt)
+                )
+            }
+
+            paymentESService.update(paymentId) {
+                it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients.")
+            }
+
+            val retryAfter = expectedProcessedTimestamp + 200L
+            return PaymentSubmissionResult.TooManyRequests(retryAfter)
+        } else {
+            paymentExecutor.submit { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId) }
+            return PaymentSubmissionResult.Success(paymentStartedAt)
+        }
+    }
+
+    private fun performPaymentTask(paymentId: UUID, amount: Int, paymentStartedAt: Long, transactionId: UUID) {
         ongoingRequestsLimiter.acquire()
         try {
             rateLimiter.tickBlocking()
 
             logger.warn("[$accountName] Submitting payment request for payment $paymentId")
 
-            val transactionId = UUID.randomUUID()
-
-            val paymentDeadlinePotentiallyReachable = now() + requestAverageProcessingTime.toMillis() <= deadline
-
-            if (paymentDeadlinePotentiallyReachable) {
-                // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
-                // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
-                paymentESService.update(paymentId) {
-                    it.logSubmission(
-                        success = true,
-                        transactionId,
-                        now(),
-                        Duration.ofMillis(now() - paymentStartedAt)
-                    )
-                }
-
-                logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
-
-                performRequest(paymentId, transactionId, amount)
-            } else {
-                paymentESService.update(paymentId) {
-                    it.logSubmission(
-                        success = false,
-                        transactionId,
-                        now(),
-                        Duration.ofMillis(now() - paymentStartedAt)
-                    )
-                }
-
-                paymentESService.update(paymentId) {
-                    it.logProcessing(false, now(), transactionId, reason = "Request deadline passed.")
-                }
+            // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
+            // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
+            paymentESService.update(paymentId) {
+                it.logSubmission(
+                    success = true,
+                    transactionId,
+                    now(),
+                    Duration.ofMillis(now() - paymentStartedAt)
+                )
             }
+
+            logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
+
+            performRequest(paymentId, transactionId, amount)
 
         } finally {
             ongoingRequestsLimiter.release()
