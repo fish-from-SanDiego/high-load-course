@@ -58,7 +58,7 @@ class PaymentExternalSystemAdapterImpl(
     )
 
     private val client = OkHttpClient.Builder().build()
-    private val processingOverheadMillis: Long = 20L
+    private val processingOverheadMillis: Long = 25L
 
     private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = true)
