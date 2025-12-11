@@ -96,8 +96,7 @@ class PaymentExternalSystemAdapterImpl(
                 it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients.")
             }
 
-            val retryAfter = expectedProcessedTimestamp + 200L
-            return PaymentSubmissionResult.TooManyRequests(retryAfter)
+            return PaymentSubmissionResult.TooManyRequests(expectedProcessedTimestamp)
         } else {
             paymentExecutor.submit { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId) }
             return PaymentSubmissionResult.Success(paymentStartedAt)
