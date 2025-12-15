@@ -7,11 +7,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import org.slf4j.LoggerFactory
-import ru.quipy.common.utils.CallerBlockingRejectedExecutionHandler
-import ru.quipy.common.utils.CountingThreadPoolExecutor
-import ru.quipy.common.utils.NamedThreadFactory
-import ru.quipy.common.utils.OngoingWindow
-import ru.quipy.common.utils.SlidingWindowRateLimiter
+import ru.quipy.common.utils.*
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
 import java.net.SocketTimeoutException
@@ -64,7 +60,8 @@ class PaymentExternalSystemAdapterImpl(
     private val client = OkHttpClient.Builder().build()
     private val processingOverheadMillis: Long = 36L
 
-    private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+    private val incomingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = false)
 
     override fun performPaymentAsync(
@@ -74,43 +71,50 @@ class PaymentExternalSystemAdapterImpl(
         deadline: Long
     ): PaymentSubmissionResult {
         val transactionId = UUID.randomUUID()
+
         val requestsInQueueCount = paymentExecutor.totalTaskCount
 
 //        уже выполняющиеся запросы берутся по верхней границе - как будто они все только начали выполнение
-        val processingTimeBeforeSeconds = (requestsInQueueCount.toDouble() / expectedRps)
-        val totalProcessingTimeMillis =
-            ((processingTimeBeforeSeconds * 1000
-                    + (requestsInQueueCount + 1) * processingOverheadMillis
-                    + requestAverageProcessingTime.toMillis()))
+        val totalQueueProcessingTimeMillis =
+            ((requestsInQueueCount.toDouble() / expectedRps) * 1000 + requestsInQueueCount * processingOverheadMillis)
                 .toLong()
 
-        val expectedProcessedTimestamp = now() + totalProcessingTimeMillis
-        if (expectedProcessedTimestamp >= deadline) {
-            logger.warn("[$accountName] Payment not submitted for txId: $transactionId, payment: $paymentId, reason: Too many requests")
-            paymentESService.update(paymentId) {
-                it.logSubmission(
-                    success = false,
-                    transactionId,
-                    now(),
-                    Duration.ofMillis(now() - paymentStartedAt)
-                )
-            }
+        if (!incomingRateLimiter.tick()) {
+            logTooManyRequests(transactionId, paymentId, paymentStartedAt)
+            return PaymentSubmissionResult.TooManyRequests(now() + totalQueueProcessingTimeMillis)
+        }
 
-            paymentESService.update(paymentId) {
-                it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients.")
-            }
 
-            return PaymentSubmissionResult.TooManyRequests(expectedProcessedTimestamp)
+        val expectedQueueProcessedTimestamp = now() + totalQueueProcessingTimeMillis
+        if (expectedQueueProcessedTimestamp + requestAverageProcessingTime.toMillis() >= deadline) {
+            logTooManyRequests(transactionId, paymentId, paymentStartedAt)
+            return PaymentSubmissionResult.TooManyRequests(expectedQueueProcessedTimestamp)
         } else {
             paymentExecutor.submit { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId) }
             return PaymentSubmissionResult.Success(paymentStartedAt)
         }
     }
 
+    private fun logTooManyRequests(transactionId: UUID, paymentId: UUID, paymentStartedAt: Long) {
+        logger.warn("[$accountName] Payment not submitted for txId: $transactionId, payment: $paymentId, reason: Too many requests")
+        paymentESService.update(paymentId) {
+            it.logSubmission(
+                success = false,
+                transactionId,
+                now(),
+                Duration.ofMillis(now() - paymentStartedAt)
+            )
+        }
+
+        paymentESService.update(paymentId) {
+            it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients.")
+        }
+    }
+
     private fun performPaymentTask(paymentId: UUID, amount: Int, paymentStartedAt: Long, transactionId: UUID) {
         ongoingRequestsLimiter.acquire()
         try {
-            rateLimiter.tickBlocking()
+            outgoingRateLimiter.tickBlocking()
 
             logger.warn("[$accountName] Submitting payment request for payment $paymentId")
 
