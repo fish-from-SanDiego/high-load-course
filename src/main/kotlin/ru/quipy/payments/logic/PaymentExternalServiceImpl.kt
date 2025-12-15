@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory
 import ru.quipy.common.utils.CallerBlockingRejectedExecutionHandler
 import ru.quipy.common.utils.CountingThreadPoolExecutor
 import ru.quipy.common.utils.NamedThreadFactory
+import ru.quipy.common.utils.OngoingWindow
 import ru.quipy.common.utils.SlidingWindowRateLimiter
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
@@ -64,6 +65,7 @@ class PaymentExternalSystemAdapterImpl(
     private val processingOverheadMillis: Long = 36L
 
     private val rateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+    private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = false)
 
     override fun performPaymentAsync(
         paymentId: UUID,
@@ -106,24 +108,29 @@ class PaymentExternalSystemAdapterImpl(
     }
 
     private fun performPaymentTask(paymentId: UUID, amount: Int, paymentStartedAt: Long, transactionId: UUID) {
-        rateLimiter.tickBlocking()
+        ongoingRequestsLimiter.acquire()
+        try {
+            rateLimiter.tickBlocking()
 
-        logger.warn("[$accountName] Submitting payment request for payment $paymentId")
+            logger.warn("[$accountName] Submitting payment request for payment $paymentId")
 
-        // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
-        // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
-        paymentESService.update(paymentId) {
-            it.logSubmission(
-                success = true,
-                transactionId,
-                now(),
-                Duration.ofMillis(now() - paymentStartedAt)
-            )
+            // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
+            // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
+            paymentESService.update(paymentId) {
+                it.logSubmission(
+                    success = true,
+                    transactionId,
+                    now(),
+                    Duration.ofMillis(now() - paymentStartedAt)
+                )
+            }
+
+            logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
+
+            performRequest(paymentId, transactionId, amount)
+        } finally {
+            ongoingRequestsLimiter.release()
         }
-
-        logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
-
-        performRequest(paymentId, transactionId, amount)
     }
 
     private fun performRequest(paymentId: UUID, transactionId: UUID, amount: Int) {
