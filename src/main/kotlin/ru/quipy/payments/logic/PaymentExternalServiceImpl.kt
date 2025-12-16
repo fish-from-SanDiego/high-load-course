@@ -48,8 +48,8 @@ class PaymentExternalSystemAdapterImpl(
         )
 
     private val paymentExecutor = CountingThreadPoolExecutor(
-        parallelRequests,
-        parallelRequests,
+        16,
+        16,
         0L,
         TimeUnit.MILLISECONDS,
         LinkedBlockingQueue(8_000),
@@ -63,9 +63,10 @@ class PaymentExternalSystemAdapterImpl(
     private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
     private val incomingRateLimiter = TokenBucketRateLimiter(
         rateLimitPerSec,
-        30,
+        115,
         1,
-        TimeUnit.SECONDS
+        TimeUnit.SECONDS,
+        initialBucketCapacity = 95
     )
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = false)
 
@@ -85,10 +86,11 @@ class PaymentExternalSystemAdapterImpl(
 
         if (!incomingRateLimiter.tick()) {
             logTooManyRequests(transactionId, paymentId, paymentStartedAt)
-            return PaymentSubmissionResult.TooManyRequests(now() + totalQueueProcessingTimeMillis)
+//            return PaymentSubmissionResult.TooManyRequests(now() + totalQueueProcessingTimeMillis)
+            return PaymentSubmissionResult.TooManyRequests(now() + requestAverageProcessingTime.toMillis())
         }
 
-        paymentExecutor.submit { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId) }
+        paymentExecutor.execute { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId) }
         return PaymentSubmissionResult.Success(paymentStartedAt)
     }
 
