@@ -25,7 +25,8 @@ class PaymentExternalSystemAdapterImpl(
     private val properties: PaymentAccountProperties,
     private val paymentESService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>,
     private val paymentProviderHostPort: String,
-    private val token: String
+    private val token: String,
+    private val incomingRateLimiterBucketSize: Int?
 ) : PaymentExternalSystemAdapter {
 
     companion object {
@@ -58,15 +59,14 @@ class PaymentExternalSystemAdapterImpl(
     )
 
     private val client = OkHttpClient.Builder().build()
-    private val processingOverheadMillis: Long = 20L
 
     private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
-    private val incomingRateLimiter = TokenBucketRateLimiter(
-        rateLimitPerSec,
-        120,
-        1,
-        TimeUnit.SECONDS,
-        initialBucketCapacity = 110
+
+    private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
+    private val incomingRateLimiter = LeakingBucketRateLimiter(
+        incomingRateLimiterRate.toLong(),
+        Duration.ofSeconds(1),
+        incomingRateLimiterBucketSize ?: incomingRateLimiterRate,
     )
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = false)
 

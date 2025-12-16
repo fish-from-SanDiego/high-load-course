@@ -8,7 +8,10 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
-import ru.quipy.payments.logic.*
+import ru.quipy.payments.logic.PaymentAccountProperties
+import ru.quipy.payments.logic.PaymentAggregateState
+import ru.quipy.payments.logic.PaymentExternalSystemAdapter
+import ru.quipy.payments.logic.PaymentExternalSystemAdapterImpl
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -35,6 +38,9 @@ class PaymentAccountsConfig {
     @Value("#{'\${payment.accounts}'.split(',')}")
     lateinit var allowedAccounts: List<String>
 
+    @Value("#{\${payment.account-leaking-bucket-size-map}}")
+    val leakingBucketSizeByAccount: Map<String, Int> = mapOf()
+
     @Bean
     fun accountAdapters(paymentService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>): List<PaymentExternalSystemAdapter> {
         val request = HttpRequest.newBuilder()
@@ -57,7 +63,8 @@ class PaymentAccountsConfig {
                     it,
                     paymentService,
                     paymentProviderHostPort,
-                    token
+                    token,
+                    leakingBucketSizeByAccount.get(it.accountName)
                 )
             }
     }
