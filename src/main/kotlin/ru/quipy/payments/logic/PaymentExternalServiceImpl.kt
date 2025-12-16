@@ -58,10 +58,15 @@ class PaymentExternalSystemAdapterImpl(
     )
 
     private val client = OkHttpClient.Builder().build()
-    private val processingOverheadMillis: Long = 36L
+    private val processingOverheadMillis: Long = 20L
 
     private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
-    private val incomingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+    private val incomingRateLimiter = TokenBucketRateLimiter(
+        rateLimitPerSec,
+        30,
+        1,
+        TimeUnit.SECONDS
+    )
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = false)
 
     override fun performPaymentAsync(
@@ -72,11 +77,10 @@ class PaymentExternalSystemAdapterImpl(
     ): PaymentSubmissionResult {
         val transactionId = UUID.randomUUID()
 
-        val requestsInQueueCount = paymentExecutor.totalTaskCount
+        val requestsInQueueCount = paymentExecutor.queue.size
 
-//        уже выполняющиеся запросы берутся по верхней границе - как будто они все только начали выполнение
         val totalQueueProcessingTimeMillis =
-            ((requestsInQueueCount.toDouble() / expectedRps) * 1000 + requestsInQueueCount * processingOverheadMillis)
+            ((requestsInQueueCount.toDouble() / expectedRps) * 1000)
                 .toLong()
 
         if (!incomingRateLimiter.tick()) {
@@ -84,15 +88,8 @@ class PaymentExternalSystemAdapterImpl(
             return PaymentSubmissionResult.TooManyRequests(now() + totalQueueProcessingTimeMillis)
         }
 
-
-        val expectedQueueProcessedTimestamp = now() + totalQueueProcessingTimeMillis
-        if (expectedQueueProcessedTimestamp + requestAverageProcessingTime.toMillis() >= deadline) {
-            logTooManyRequests(transactionId, paymentId, paymentStartedAt)
-            return PaymentSubmissionResult.TooManyRequests(expectedQueueProcessedTimestamp)
-        } else {
-            paymentExecutor.submit { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId) }
-            return PaymentSubmissionResult.Success(paymentStartedAt)
-        }
+        paymentExecutor.submit { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId) }
+        return PaymentSubmissionResult.Success(paymentStartedAt)
     }
 
     private fun logTooManyRequests(transactionId: UUID, paymentId: UUID, paymentStartedAt: Long) {
