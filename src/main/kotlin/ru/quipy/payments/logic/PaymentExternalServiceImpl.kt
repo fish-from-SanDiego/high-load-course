@@ -63,10 +63,10 @@ class PaymentExternalSystemAdapterImpl(
     private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
     private val incomingRateLimiter = TokenBucketRateLimiter(
         rateLimitPerSec,
-        115,
+        120,
         1,
         TimeUnit.SECONDS,
-        initialBucketCapacity = 95
+        initialBucketCapacity = 110
     )
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = false)
 
