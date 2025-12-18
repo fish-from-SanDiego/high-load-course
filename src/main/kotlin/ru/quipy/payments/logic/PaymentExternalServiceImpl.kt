@@ -7,7 +7,6 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import org.slf4j.LoggerFactory
-import ru.quipy.OnlineShopApplication.Companion.appExecutor
 import ru.quipy.common.utils.*
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
@@ -106,12 +105,10 @@ class PaymentExternalSystemAdapterImpl(
             it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients")
         }
 
-        appExecutor.submit {
-            metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
-            metricsService.increaseProcessedPaymentRequestCounter(
-                    "FAIL - Too many requests from clients"
-            )
-        }
+        metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
+        metricsService.increaseProcessedPaymentRequestCounter(
+            "FAIL - Too many requests from clients"
+        )
     }
 
     private fun performPaymentTask(paymentId: UUID, amount: Int, paymentStartedAt: Long, transactionId: UUID) {
@@ -131,9 +128,7 @@ class PaymentExternalSystemAdapterImpl(
                     Duration.ofMillis(now() - paymentStartedAt)
                 )
             }
-            appExecutor.submit {
-                metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
-            }
+            metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
 
             logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
 
@@ -160,11 +155,9 @@ class PaymentExternalSystemAdapterImpl(
                     paymentESService.update(paymentId) {
                         it.logProcessing(false, now(), transactionId, reason = "Request timeout.")
                     }
-                    appExecutor.submit {
-                        metricsService.increaseProcessedPaymentRequestCounter(
-                            "FAIL - Request timeout"
-                        )
-                    }
+                    metricsService.increaseProcessedPaymentRequestCounter(
+                        "FAIL - Request timeout"
+                    )
                 }
 
                 else -> {
@@ -173,11 +166,9 @@ class PaymentExternalSystemAdapterImpl(
                     paymentESService.update(paymentId) {
                         it.logProcessing(false, now(), transactionId, reason = e.message)
                     }
-                    appExecutor.submit {
-                        metricsService.increaseProcessedPaymentRequestCounter(
-                            "FAIL - ${e.message}"
-                        )
-                    }
+                    metricsService.increaseProcessedPaymentRequestCounter(
+                        "FAIL - ${e.message}"
+                    )
                 }
             }
         }
@@ -198,11 +189,9 @@ class PaymentExternalSystemAdapterImpl(
         paymentESService.update(paymentId) {
             it.logProcessing(body.result, now(), transactionId, reason = body.message)
         }
-        appExecutor.submit {
-            metricsService.increaseProcessedPaymentRequestCounter(
-                "SUCCESS"
-            )
-        }
+        metricsService.increaseProcessedPaymentRequestCounter(
+            "SUCCESS"
+        )
     }
 
     override fun price() = properties.price
