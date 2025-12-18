@@ -52,10 +52,10 @@ class PaymentExternalSystemAdapterImpl(
         )
 
     private val paymentExecutor = ThreadPoolExecutor(
+        16.coerceAtMost(parallelRequests),
         parallelRequests,
-        parallelRequests,
-        0L,
-        TimeUnit.MILLISECONDS,
+        60L,
+        TimeUnit.SECONDS,
         LinkedBlockingQueue(8_000),
         NamedThreadFactory("payment-external-executor-${accountName}"),
         CallerBlockingRejectedExecutionHandler()
