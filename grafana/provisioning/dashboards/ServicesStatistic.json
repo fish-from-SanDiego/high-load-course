@@ -2539,7 +2539,7 @@
         "x": 0,
         "y": 93
       },
-      "id": 101,
+      "id": 107,
       "options": {
         "legend": {
           "calcs": [],
@@ -2557,37 +2557,13 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(http_payment_requests_received_fish_from_sd_total[30s])",
-          "legendFormat": "received",
+          "expr": "sum(rate(http_payment_retries_fish_from_sd_total[30s])) by (accountName)",
+          "legendFormat": "{{accountName}}",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(http_payment_requests_submitted_fish_from_sd_total[30s])) by (result)",
-          "hide": false,
-          "legendFormat": "submitted to payment service - {{result}}",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(http_payment_requests_processed_fish_from_sd_total[30s])) by (result)",
-          "hide": false,
-          "legendFormat": "processed - {{result}}",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "Requests rps comparison",
+      "title": "Retries per second",
       "type": "timeseries"
     },
     {
@@ -2716,6 +2692,124 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 101
+      },
+      "id": 101,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "rate(http_payment_requests_received_fish_from_sd_total[30s])",
+          "legendFormat": "received",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(http_payment_requests_submitted_fish_from_sd_total[30s])) by (result)",
+          "hide": false,
+          "legendFormat": "submitted to payment service - {{result}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(http_payment_requests_processed_fish_from_sd_total[30s])) by (result)",
+          "hide": false,
+          "legendFormat": "processed - {{result}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Requests rps comparison",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "thresholds"
           },
           "mappings": [],
@@ -2766,7 +2860,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 101
+        "y": 109
       },
       "id": 104,
       "options": {
@@ -2838,7 +2932,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 109
+        "y": 117
       },
       "id": 21,
       "panels": [],
@@ -2910,7 +3004,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 110
+        "y": 118
       },
       "id": 19,
       "options": {
@@ -3010,7 +3104,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 110
+        "y": 118
       },
       "id": 22,
       "options": {
@@ -3110,7 +3204,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 118
+        "y": 126
       },
       "id": 100,
       "options": {
@@ -3151,7 +3245,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 126
+        "y": 134
       },
       "id": 38,
       "panels": [
@@ -3666,7 +3760,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 127
+        "y": 135
       },
       "id": 97,
       "panels": [
@@ -4301,5 +4395,5 @@
   "timezone": "",
   "title": "Services statistic",
   "uid": "KVr-Vmpnz",
-  "version": 22
+  "version": 23
 }

@@ -111,33 +111,19 @@ class PaymentExternalSystemAdapterImpl(
     ) {
         ongoingRequestsLimiter.acquire()
         try {
-            outgoingRateLimiter.tickBlocking()
-
-            logger.warn("[$accountName] Submitting payment request for payment $paymentId")
-
-            // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
-            // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
-            paymentESService.update(paymentId) {
-                it.logSubmission(
-                    success = true,
-                    transactionId,
-                    now(),
-                    Duration.ofMillis(now() - paymentStartedAt)
-                )
-            }
-            appExecutor.submit {
-                metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
-            }
-
-            logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
-
-            performRequest(paymentId, transactionId, amount, deadline)
+            performRequest(paymentId, transactionId, amount, deadline, paymentStartedAt)
         } finally {
             ongoingRequestsLimiter.release()
         }
     }
 
-    private fun performRequest(paymentId: UUID, transactionId: UUID, amount: Int, deadline: Long) {
+    private fun performRequest(
+        paymentId: UUID,
+        transactionId: UUID,
+        amount: Int,
+        deadline: Long,
+        paymentStartedAt: Long,
+    ) {
         try {
             val request = Request.Builder().run {
                 url("http://$paymentProviderHostPort/external/process?serviceName=$serviceName&token=$token&accountName=$accountName&transactionId=$transactionId&paymentId=$paymentId&amount=$amount")
@@ -158,9 +144,31 @@ class PaymentExternalSystemAdapterImpl(
 
                 val call = originalCall.clone()
 
+                outgoingRateLimiter.tickBlocking()
+
                 metricsService.increaseSentPaymentRequestCounter(accountName)
                 if (attempt != 1) {
                     metricsService.increasePaymentRequestRetriesCounter(accountName)
+                }
+
+                if (attempt == 1) {
+                    logger.warn("[$accountName] Submitting payment request for payment $paymentId")
+
+                    // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
+                    // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
+                    paymentESService.update(paymentId) {
+                        it.logSubmission(
+                            success = true,
+                            transactionId,
+                            now(),
+                            Duration.ofMillis(now() - paymentStartedAt)
+                        )
+                    }
+                    appExecutor.submit {
+                        metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
+                    }
+
+                    logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
                 }
 
 //                Supplier<T> может вернуть T?, но executeOnce не возвращает null
