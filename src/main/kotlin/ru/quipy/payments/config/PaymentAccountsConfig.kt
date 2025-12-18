@@ -19,6 +19,8 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.*
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 
 @Configuration
@@ -27,6 +29,7 @@ class PaymentAccountsConfig {
         private val javaClient = HttpClient.newBuilder().build()
         private val mapper = ObjectMapper().registerKotlinModule().registerModules(JavaTimeModule())
     }
+
     @Autowired
     lateinit var metricsService: PaymentMetricsService
 
@@ -44,6 +47,9 @@ class PaymentAccountsConfig {
 
     @Value("#{\${payment.account-leaking-bucket-size-map}}")
     val leakingBucketSizeByAccount: Map<String, Int> = mapOf()
+
+    @Value("#{\${payment.account-expected-processing-time-map}}")
+    val expectedProcessingTimeMillisByAccount: Map<String, Int> = mapOf()
 
     @Bean
     fun accountAdapters(paymentService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>): List<PaymentExternalSystemAdapter> {
@@ -69,8 +75,16 @@ class PaymentAccountsConfig {
                     metricsService,
                     paymentProviderHostPort,
                     token,
-                    leakingBucketSizeByAccount.get(it.accountName)
+                    AccountOptions(
+                        leakingBucketSizeByAccount.get(it.accountName),
+                        expectedProcessingTimeMillisByAccount.get(it.accountName)?.milliseconds
+                    )
                 )
             }
     }
+
+    public data class AccountOptions(
+        val incomingRateLimiterBucketSize: Int?,
+        val expectedProcessingTime: Duration?
+    )
 }

@@ -11,7 +11,9 @@ import ru.quipy.OnlineShopApplication.Companion.appExecutor
 import ru.quipy.common.utils.*
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
+import ru.quipy.payments.config.PaymentAccountsConfig.AccountOptions
 import ru.quipy.payments.metrics.PaymentMetricsService
+import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 import java.time.Duration
 import java.util.*
@@ -29,7 +31,7 @@ class PaymentExternalSystemAdapterImpl(
     private val metricsService: PaymentMetricsService,
     private val paymentProviderHostPort: String,
     private val token: String,
-    private val incomingRateLimiterBucketSize: Int?
+    private val accountOptions: AccountOptions
 ) : PaymentExternalSystemAdapter {
 
     companion object {
@@ -42,13 +44,15 @@ class PaymentExternalSystemAdapterImpl(
     private val serviceName = properties.serviceName
     private val accountName = properties.accountName
     private val requestAverageProcessingTime = properties.averageProcessingTime
+    private val expectedProcessingTime =
+        accountOptions.expectedProcessingTime ?: requestAverageProcessingTime.toKotlinDuration()
     private val rateLimitPerSec = properties.rateLimitPerSec
     private val parallelRequests = properties.parallelRequests
 
     private val expectedRps =
         min(
             rateLimitPerSec.toDouble(),
-            parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
+            parallelRequests / expectedProcessingTime.toDouble(DurationUnit.SECONDS)
         )
 
     private val paymentExecutor = CountingThreadPoolExecutor(
@@ -61,7 +65,9 @@ class PaymentExternalSystemAdapterImpl(
         CallerBlockingRejectedExecutionHandler()
     )
 
-    private val client = OkHttpClient.Builder().build()
+    private val client = OkHttpClient.Builder()
+        .callTimeout(expectedProcessingTime.inWholeMilliseconds, TimeUnit.MILLISECONDS)
+        .build()
 
     private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
 
@@ -69,12 +75,12 @@ class PaymentExternalSystemAdapterImpl(
     private val incomingRateLimiter = LeakingBucketRateLimiter(
         incomingRateLimiterRate.toLong(),
         Duration.ofSeconds(1),
-        incomingRateLimiterBucketSize ?: incomingRateLimiterRate,
+        accountOptions.incomingRateLimiterBucketSize ?: incomingRateLimiterRate,
     )
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests, fair = false)
 
-    private val retryDelayStrategy : RetryDelayStrategy = ExponentialBackoffDelayStrategy(
-        requestAverageProcessingTime.dividedBy(2L)
+    private val retryDelayStrategy: RetryDelayStrategy = ExponentialBackoffDelayStrategy(
+        expectedProcessingTime / 2
 //        Duration.ofMillis(350L)
     )
     private val maxRequestAttempts = 5
@@ -89,7 +95,7 @@ class PaymentExternalSystemAdapterImpl(
 
         if (!incomingRateLimiter.tick()) {
             logTooManyRequests(transactionId, paymentId, paymentStartedAt)
-            return PaymentSubmissionResult.TooManyRequests(now() + requestAverageProcessingTime.toMillis())
+            return PaymentSubmissionResult.TooManyRequests(now() + expectedProcessingTime.inWholeMilliseconds)
         }
 
         paymentExecutor.execute { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId, deadline) }
@@ -141,7 +147,7 @@ class PaymentExternalSystemAdapterImpl(
             val originalCall = client.newCall(request)
 
             for (attempt in 1..maxRequestAttempts) {
-                if (now() + requestAverageProcessingTime.toMillis() > deadline) {
+                if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
                     logger.warn("[$accountName] Not attempting request for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
                     paymentESService.update(paymentId) {
                         it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
@@ -149,8 +155,19 @@ class PaymentExternalSystemAdapterImpl(
                     appExecutor.submit { metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded") }
                     return
                 }
+
                 val call = originalCall.clone()
-                when (val callResult = executeOnce(call)) {
+
+                metricsService.increaseSentPaymentRequestCounter(accountName)
+                if (attempt != 1) {
+                    metricsService.increasePaymentRequestRetriesCounter(accountName)
+                }
+
+//                Supplier<T> может вернуть T?, но executeOnce не возвращает null
+                val callResult =
+                    metricsService.requestLatencyTimer(accountName).record<PaymentCallResult> { executeOnce(call) }!!
+
+                when (callResult) {
                     is PaymentCallResult.Success -> {
                         val body = callResult.response
                         logger.warn(
@@ -231,7 +248,7 @@ class PaymentExternalSystemAdapterImpl(
     }
 
     private fun executeOnce(requestCall: Call): PaymentCallResult {
-        return try {
+        try {
             requestCall.execute().use { response ->
                 response.header("Retry-After")?.let {
                     try {
@@ -263,7 +280,9 @@ class PaymentExternalSystemAdapterImpl(
                 }
             }
         } catch (_: SocketTimeoutException) {
-            PaymentCallResult.RetryableFailure("Socket timeout")
+            return PaymentCallResult.RetryableFailure("Socket timeout")
+        } catch (_: InterruptedIOException) {
+            return PaymentCallResult.RetryableFailure("Request timeout")
         }
     }
 
@@ -275,7 +294,7 @@ class PaymentExternalSystemAdapterImpl(
         delayMillis: Long,
         deadline: Long
     ): Boolean {
-        if (now() + requestAverageProcessingTime.toMillis() + delayMillis > deadline) {
+        if (now() + expectedProcessingTime.inWholeMilliseconds + delayMillis > deadline) {
             logger.warn("[$accountName] Not waiting retry for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
             paymentESService.update(paymentId) {
                 it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
