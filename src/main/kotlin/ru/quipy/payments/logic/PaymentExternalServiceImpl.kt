@@ -16,6 +16,7 @@ import java.net.SocketTimeoutException
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 import kotlin.time.DurationUnit
@@ -51,11 +52,11 @@ class PaymentExternalSystemAdapterImpl(
             parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
         )
 
-    private val paymentExecutor = CountingThreadPoolExecutor(
-        16,
-        16,
-        0L,
-        TimeUnit.MILLISECONDS,
+    private val paymentExecutor = ThreadPoolExecutor(
+        16.coerceAtMost(parallelRequests),
+        parallelRequests,
+        60L,
+        TimeUnit.SECONDS,
         LinkedBlockingQueue(8_000),
         NamedThreadFactory("payment-external-executor-${accountName}"),
         CallerBlockingRejectedExecutionHandler()
