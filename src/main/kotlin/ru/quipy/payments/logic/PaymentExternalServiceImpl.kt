@@ -54,13 +54,13 @@ class PaymentExternalSystemAdapterImpl(
         )
 
     private val paymentExecutor = ThreadPoolExecutor(
+        16.coerceAtMost(parallelRequests),
         parallelRequests,
-        parallelRequests,
-        0L,
-        TimeUnit.MILLISECONDS,
+        60L,
+        TimeUnit.SECONDS,
         LinkedBlockingQueue(8_000),
         NamedThreadFactory("payment-external-executor-${accountName}"),
-        ThreadPoolExecutor.AbortPolicy()
+        CallerBlockingRejectedExecutionHandler()
     )
 
     private val httpConnectionPool = ConnectionPool(
@@ -73,7 +73,7 @@ class PaymentExternalSystemAdapterImpl(
     )
 
     private val client = OkHttpClient.Builder()
-        .connectionPool(httpConnectionPool)
+//        .connectionPool(httpConnectionPool)
         .callTimeout(expectedProcessingTime.inWholeMilliseconds, TimeUnit.MILLISECONDS)
         .build()
 
@@ -92,6 +92,10 @@ class PaymentExternalSystemAdapterImpl(
 //        Duration.ofMillis(350L)
     )
     private val maxRequestAttempts = 5
+
+    init {
+        metricsService.registerPaymentExecutorGauges(paymentExecutor, accountName)
+    }
 
     override fun performPaymentAsync(
         paymentId: UUID,

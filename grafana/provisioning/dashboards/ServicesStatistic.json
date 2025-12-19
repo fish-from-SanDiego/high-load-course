@@ -2146,7 +2146,7 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -2154,8 +2154,817 @@
         "y": 84
       },
       "id": 102,
-      "panels": [],
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 101
+          },
+          "id": 105,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": " rate(http_payment_request_latency_fish_from_sd_seconds_sum[1m])\r\n/\r\n rate(http_payment_request_latency_fish_from_sd_seconds_count[1m])\r\n",
+              "legendFormat": "average - {{accountName}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "median - {{accountName}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.75, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.75 - {{accountName}}",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.85, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.85 - {{accountName}}",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.9, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.9 - {{accountName}}",
+              "range": true,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.95 - {{accountName}}",
+              "range": true,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.99 - {{accountName}}",
+              "range": true,
+              "refId": "G"
+            }
+          ],
+          "title": "Local request latency (seconds)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 101
+          },
+          "id": 106,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": " rate(http_payment_request_latency_fish_from_sd_seconds_sum[$__range])\r\n/\r\n rate(http_payment_request_latency_fish_from_sd_seconds_count[$__range])\r\n",
+              "legendFormat": "average - {{accountName}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "median - {{accountName}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.75, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.75 - {{accountName}}",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.85, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.85 - {{accountName}}",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.9, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.9 - {{accountName}}",
+              "range": true,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.95 - {{accountName}}",
+              "range": true,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "q0.99 - {{accountName}}",
+              "range": true,
+              "refId": "G"
+            }
+          ],
+          "title": "Request latency (seconds)",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 109
+          },
+          "id": 107,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "sum(rate(http_payment_retries_fish_from_sd_total[30s])) by (accountName)",
+              "legendFormat": "{{accountName}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Retries per second",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "bars",
+                "fillOpacity": 50,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 109
+          },
+          "id": 103,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "rate(http_payment_requests_received_fish_from_sd_total[30s])",
+              "legendFormat": "received",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(http_payment_requests_submitted_fish_from_sd_total[30s])) by (result)",
+              "hide": false,
+              "legendFormat": "submitted to payment service - {{result}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(http_payment_requests_processed_fish_from_sd_total[30s])) by (result)",
+              "hide": false,
+              "legendFormat": "processed - {{result}}",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Requests rps comparison (bars)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "processed - FAIL - Too many requests from clients",
+                      "processed - FAIL - Deadline exceeded",
+                      "processed - SUCCESS"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": true,
+                      "viz": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 117
+          },
+          "id": 101,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "editorMode": "code",
+              "expr": "rate(http_payment_requests_received_fish_from_sd_total[30s])",
+              "legendFormat": "received",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(http_payment_requests_submitted_fish_from_sd_total[30s])) by (result)",
+              "hide": false,
+              "legendFormat": "submitted to payment service - {{result}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(http_payment_requests_processed_fish_from_sd_total[30s])) by (result)",
+              "hide": false,
+              "legendFormat": "processed - {{result}}",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Requests rps comparison",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "success"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "fail"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "red",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 125
+          },
+          "id": 104,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "auto",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "increase(http_payment_requests_received_fish_from_sd_total[$__range]) > 0",
+              "interval": "",
+              "legendFormat": "received",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "sum(increase(http_payment_requests_submitted_fish_from_sd_total[$__range])) by (result) > 0",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "submitted - {{result}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+              },
+              "editorMode": "code",
+              "expr": "sum(increase(http_payment_requests_processed_fish_from_sd_total[$__range])) by (result) > 0",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "processed - {{result}}",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Http requests stats",
+          "type": "stat"
+        }
+      ],
       "title": "Online shop http calls info",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 85
+      },
+      "id": 109,
+      "panels": [],
+      "title": "Online shop executors info",
       "type": "row"
     },
     {
@@ -2185,13 +2994,13 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
+            "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "showValues": false,
             "spanNulls": false,
             "stacking": {
@@ -2223,9 +3032,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 85
+        "y": 86
       },
-      "id": 105,
+      "id": 108,
       "options": {
         "legend": {
           "calcs": [],
@@ -2243,8 +3052,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": " rate(http_payment_request_latency_fish_from_sd_seconds_sum[1m])\r\n/\r\n rate(http_payment_request_latency_fish_from_sd_seconds_count[1m])\r\n",
-          "legendFormat": "average - {{accountName}}",
+          "expr": "payment_executor_active_threads_fish_from_sd",
+          "legendFormat": "active threads - {{accountName}}",
           "range": true,
           "refId": "A"
         },
@@ -2254,434 +3063,14 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.5, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
+          "expr": "payment_executor_pool_size_fish_from_sd",
           "hide": false,
-          "instant": false,
-          "legendFormat": "median - {{accountName}}",
+          "legendFormat": "pool size - {{accountName}}",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.75, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.75 - {{accountName}}",
-          "range": true,
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.85, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.85 - {{accountName}}",
-          "range": true,
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.9, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.9 - {{accountName}}",
-          "range": true,
-          "refId": "E"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.95 - {{accountName}}",
-          "range": true,
-          "refId": "F"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[1m])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.99 - {{accountName}}",
-          "range": true,
-          "refId": "G"
         }
       ],
-      "title": "Local request latency (seconds)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 85
-      },
-      "id": 106,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": " rate(http_payment_request_latency_fish_from_sd_seconds_sum[$__range])\r\n/\r\n rate(http_payment_request_latency_fish_from_sd_seconds_count[$__range])\r\n",
-          "legendFormat": "average - {{accountName}}",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.5, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "median - {{accountName}}",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.75, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.75 - {{accountName}}",
-          "range": true,
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.85, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.85 - {{accountName}}",
-          "range": true,
-          "refId": "D"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.9, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.9 - {{accountName}}",
-          "range": true,
-          "refId": "E"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.95 - {{accountName}}",
-          "range": true,
-          "refId": "F"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(http_payment_request_latency_fish_from_sd_seconds_bucket[$__range])) by (le, accountName))",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "q0.99 - {{accountName}}",
-          "range": true,
-          "refId": "G"
-        }
-      ],
-      "title": "Request latency (seconds)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 93
-      },
-      "id": 107,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "sum(rate(http_payment_retries_fish_from_sd_total[30s])) by (accountName)",
-          "legendFormat": "{{accountName}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Retries per second",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "bars",
-            "fillOpacity": 50,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "normal"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 93
-      },
-      "id": 103,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "rate(http_payment_requests_received_fish_from_sd_total[30s])",
-          "legendFormat": "received",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(http_payment_requests_submitted_fish_from_sd_total[30s])) by (result)",
-          "hide": false,
-          "legendFormat": "submitted to payment service - {{result}}",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(http_payment_requests_processed_fish_from_sd_total[30s])) by (result)",
-          "hide": false,
-          "legendFormat": "processed - {{result}}",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Requests rps comparison (bars)",
+      "title": "Payment executor pool stats",
       "type": "timeseries"
     },
     {
@@ -2711,13 +3100,13 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "smooth",
+            "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "showValues": false,
             "spanNulls": false,
             "stacking": {
@@ -2748,10 +3137,10 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 101
+        "x": 12,
+        "y": 86
       },
-      "id": 101,
+      "id": 110,
       "options": {
         "legend": {
           "calcs": [],
@@ -2769,8 +3158,8 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(http_payment_requests_received_fish_from_sd_total[30s])",
-          "legendFormat": "received",
+          "expr": "payment_executor_queue_size_fish_from_sd",
+          "legendFormat": "Queue size - {{accountName}}",
           "range": true,
           "refId": "A"
         },
@@ -2780,151 +3169,15 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_payment_requests_submitted_fish_from_sd_total[30s])) by (result)",
+          "expr": "payment_executor_queue_remaining_capacity_fish_from_sd",
           "hide": false,
-          "legendFormat": "submitted to payment service - {{result}}",
+          "legendFormat": "Queue remaining capacity - {{accountName}}",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(http_payment_requests_processed_fish_from_sd_total[30s])) by (result)",
-          "hide": false,
-          "legendFormat": "processed - {{result}}",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "Requests rps comparison",
+      "title": "Payment executor queue stats",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "success"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "fail"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 109
-      },
-      "id": 104,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "percentChangeColorMode": "standard",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "12.3.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "exemplar": true,
-          "expr": "increase(http_payment_requests_received_fish_from_sd_total[$__range]) > 0",
-          "interval": "",
-          "legendFormat": "received",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "exemplar": true,
-          "expr": "sum(increase(http_payment_requests_submitted_fish_from_sd_total[$__range])) by (result) > 0",
-          "hide": false,
-          "interval": "",
-          "legendFormat": "submitted - {{result}}",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "PBFA97CFB590B2093"
-          },
-          "editorMode": "code",
-          "expr": "sum(increase(http_payment_requests_processed_fish_from_sd_total[$__range])) by (result) > 0",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "processed - {{result}}",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Http requests stats",
-      "type": "stat"
     },
     {
       "collapsed": false,
@@ -2932,7 +3185,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 117
+        "y": 94
       },
       "id": 21,
       "panels": [],
@@ -3004,7 +3257,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 118
+        "y": 95
       },
       "id": 19,
       "options": {
@@ -3104,7 +3357,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 118
+        "y": 95
       },
       "id": 22,
       "options": {
@@ -3204,7 +3457,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 126
+        "y": 103
       },
       "id": 100,
       "options": {
@@ -3245,7 +3498,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 134
+        "y": 111
       },
       "id": 38,
       "panels": [
@@ -3311,7 +3564,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 215
+            "y": 231
           },
           "id": 40,
           "options": {
@@ -3407,7 +3660,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 215
+            "y": 231
           },
           "id": 39,
           "options": {
@@ -3508,7 +3761,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 223
+            "y": 239
           },
           "id": 95,
           "options": {
@@ -3620,7 +3873,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 223
+            "y": 239
           },
           "id": 42,
           "options": {
@@ -3716,7 +3969,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 231
+            "y": 247
           },
           "id": 41,
           "options": {
@@ -3760,7 +4013,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 135
+        "y": 112
       },
       "id": 97,
       "panels": [
@@ -3829,7 +4082,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 479
+            "y": 495
           },
           "id": 98,
           "maxDataPoints": 100,
@@ -3933,7 +4186,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 479
+            "y": 495
           },
           "id": 99,
           "maxDataPoints": 100,
@@ -4039,7 +4292,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 487
+            "y": 503
           },
           "id": 24,
           "options": {
@@ -4180,7 +4433,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 495
+            "y": 511
           },
           "id": 4,
           "options": {
@@ -4282,7 +4535,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 495
+            "y": 511
           },
           "id": 96,
           "options": {
@@ -4395,5 +4648,5 @@
   "timezone": "",
   "title": "Services statistic",
   "uid": "KVr-Vmpnz",
-  "version": 23
+  "version": 28
 }
