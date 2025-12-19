@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import okhttp3.*
 import org.slf4j.LoggerFactory
+import ru.quipy.OnlineShopApplication.Companion.appExecutor
 import ru.quipy.common.utils.*
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
@@ -157,7 +158,9 @@ class PaymentExternalSystemAdapterImpl(
                     paymentESService.update(paymentId) {
                         it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
                     }
-                    metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+                    appExecutor.submit {
+                        metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+                    }
                     return
                 }
 
@@ -165,9 +168,11 @@ class PaymentExternalSystemAdapterImpl(
 
                 outgoingRateLimiter.tickBlocking()
 
-                metricsService.increaseSentPaymentRequestCounter(accountName)
-                if (attempt != 1) {
-                    metricsService.increasePaymentRequestRetriesCounter(accountName)
+                appExecutor.submit {
+                    metricsService.increaseSentPaymentRequestCounter(accountName)
+                    if (attempt != 1) {
+                        metricsService.increasePaymentRequestRetriesCounter(accountName)
+                    }
                 }
 
                 if (attempt == 1) {
@@ -183,7 +188,9 @@ class PaymentExternalSystemAdapterImpl(
                             Duration.ofMillis(now() - paymentStartedAt)
                         )
                     }
-                    metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
+                    appExecutor.submit {
+                        metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
+                    }
 
                     logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
                 }
@@ -202,12 +209,14 @@ class PaymentExternalSystemAdapterImpl(
                         paymentESService.update(paymentId) {
                             it.logProcessing(body.result, now(), transactionId, reason = body.message)
                         }
-                        metricsService.increaseProcessedPaymentRequestCounter(
-                            if (body.result == false)
-                                "FAIL - ${body.message}"
-                            else
-                                "SUCCESS"
-                        )
+                        appExecutor.submit {
+                            metricsService.increaseProcessedPaymentRequestCounter(
+                                if (body.result == false)
+                                    "FAIL - ${body.message}"
+                                else
+                                    "SUCCESS"
+                            )
+                        }
                         return
                     }
 
@@ -241,9 +250,11 @@ class PaymentExternalSystemAdapterImpl(
                         paymentESService.update(paymentId) {
                             it.logProcessing(false, now(), transactionId, reason = callResult.reason)
                         }
-                        metricsService.increaseProcessedPaymentRequestCounter(
-                            "FAIL - ${callResult.reason}"
-                        )
+                        appExecutor.submit {
+                            metricsService.increaseProcessedPaymentRequestCounter(
+                                "FAIL - ${callResult.reason}"
+                            )
+                        }
                         return
                     }
                 }
@@ -253,16 +264,20 @@ class PaymentExternalSystemAdapterImpl(
             paymentESService.update(paymentId) {
                 it.logProcessing(false, now(), transactionId, reason = "Retries exhausted")
             }
-            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
+            appExecutor.submit {
+                metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
+            }
         } catch (e: Exception) {
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId", e)
 
             paymentESService.update(paymentId) {
                 it.logProcessing(false, now(), transactionId, reason = e.message)
             }
-            metricsService.increaseProcessedPaymentRequestCounter(
-                "FAIL - ${e.message}"
-            )
+            appExecutor.submit {
+                metricsService.increaseProcessedPaymentRequestCounter(
+                    "FAIL - ${e.message}"
+                )
+            }
         }
     }
 
@@ -318,7 +333,9 @@ class PaymentExternalSystemAdapterImpl(
             paymentESService.update(paymentId) {
                 it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
             }
-            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+            appExecutor.submit {
+                metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+            }
             return false
         }
 
@@ -341,11 +358,12 @@ class PaymentExternalSystemAdapterImpl(
         paymentESService.update(paymentId) {
             it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients")
         }
-
-        metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
-        metricsService.increaseProcessedPaymentRequestCounter(
-            "FAIL - Too many requests from clients"
-        )
+        appExecutor.submit {
+            metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
+            metricsService.increaseProcessedPaymentRequestCounter(
+                "FAIL - Too many requests from clients"
+            )
+        }
     }
 
     override fun price() = properties.price
