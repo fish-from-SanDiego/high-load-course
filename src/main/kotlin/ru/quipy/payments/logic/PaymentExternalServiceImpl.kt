@@ -7,7 +7,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import org.slf4j.LoggerFactory
-import ru.quipy.OnlineShopApplication.Companion.appExecutor
 import ru.quipy.common.utils.*
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
@@ -18,6 +17,7 @@ import java.net.SocketTimeoutException
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 import kotlin.time.DurationUnit
@@ -55,11 +55,11 @@ class PaymentExternalSystemAdapterImpl(
             parallelRequests / expectedProcessingTime.toDouble(DurationUnit.SECONDS)
         )
 
-    private val paymentExecutor = CountingThreadPoolExecutor(
-        16,
-        16,
-        0L,
-        TimeUnit.MILLISECONDS,
+    private val paymentExecutor = ThreadPoolExecutor(
+        16.coerceAtMost(parallelRequests),
+        parallelRequests,
+        60L,
+        TimeUnit.SECONDS,
         LinkedBlockingQueue(8_000),
         NamedThreadFactory("payment-external-executor-${accountName}"),
         CallerBlockingRejectedExecutionHandler()
@@ -138,7 +138,7 @@ class PaymentExternalSystemAdapterImpl(
                     paymentESService.update(paymentId) {
                         it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
                     }
-                    appExecutor.submit { metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded") }
+                    metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
                     return
                 }
 
@@ -164,9 +164,7 @@ class PaymentExternalSystemAdapterImpl(
                             Duration.ofMillis(now() - paymentStartedAt)
                         )
                     }
-                    appExecutor.submit {
-                        metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
-                    }
+                    metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
 
                     logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
                 }
@@ -185,14 +183,12 @@ class PaymentExternalSystemAdapterImpl(
                         paymentESService.update(paymentId) {
                             it.logProcessing(body.result, now(), transactionId, reason = body.message)
                         }
-                        appExecutor.submit {
-                            metricsService.increaseProcessedPaymentRequestCounter(
-                                if (body.result == false)
-                                    "FAIL - ${body.message}"
-                                else
-                                    "SUCCESS"
-                            )
-                        }
+                        metricsService.increaseProcessedPaymentRequestCounter(
+                            if (body.result == false)
+                                "FAIL - ${body.message}"
+                            else
+                                "SUCCESS"
+                        )
                         return
                     }
 
@@ -226,11 +222,9 @@ class PaymentExternalSystemAdapterImpl(
                         paymentESService.update(paymentId) {
                             it.logProcessing(false, now(), transactionId, reason = callResult.reason)
                         }
-                        appExecutor.submit {
-                            metricsService.increaseProcessedPaymentRequestCounter(
-                                "FAIL - ${callResult.reason}"
-                            )
-                        }
+                        metricsService.increaseProcessedPaymentRequestCounter(
+                            "FAIL - ${callResult.reason}"
+                        )
                         return
                     }
                 }
@@ -240,18 +234,16 @@ class PaymentExternalSystemAdapterImpl(
             paymentESService.update(paymentId) {
                 it.logProcessing(false, now(), transactionId, reason = "Retries exhausted")
             }
-            appExecutor.submit { metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted") }
+            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
         } catch (e: Exception) {
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId", e)
 
             paymentESService.update(paymentId) {
                 it.logProcessing(false, now(), transactionId, reason = e.message)
             }
-            appExecutor.submit {
-                metricsService.increaseProcessedPaymentRequestCounter(
-                    "FAIL - ${e.message}"
-                )
-            }
+            metricsService.increaseProcessedPaymentRequestCounter(
+                "FAIL - ${e.message}"
+            )
         }
     }
 
@@ -307,7 +299,7 @@ class PaymentExternalSystemAdapterImpl(
             paymentESService.update(paymentId) {
                 it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
             }
-            appExecutor.submit { metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded") }
+            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
             return false
         }
 
@@ -331,12 +323,10 @@ class PaymentExternalSystemAdapterImpl(
             it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients")
         }
 
-        appExecutor.submit {
-            metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
-            metricsService.increaseProcessedPaymentRequestCounter(
-                "FAIL - Too many requests from clients"
-            )
-        }
+        metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
+        metricsService.increaseProcessedPaymentRequestCounter(
+            "FAIL - Too many requests from clients"
+        )
     }
 
     override fun price() = properties.price
