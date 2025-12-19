@@ -54,10 +54,10 @@ class PaymentExternalSystemAdapterImpl(
         )
 
     private val paymentExecutor = ThreadPoolExecutor(
-        16.coerceAtMost(parallelRequests),
         parallelRequests,
-        60L,
-        TimeUnit.SECONDS,
+        parallelRequests,
+        0L,
+        TimeUnit.MILLISECONDS,
         LinkedBlockingQueue(8_000),
         NamedThreadFactory("payment-external-executor-${accountName}"),
         CallerBlockingRejectedExecutionHandler()
@@ -73,7 +73,7 @@ class PaymentExternalSystemAdapterImpl(
     )
 
     private val client = OkHttpClient.Builder()
-//        .connectionPool(httpConnectionPool)
+        .connectionPool(httpConnectionPool)
         .callTimeout(expectedProcessingTime.inWholeMilliseconds, TimeUnit.MILLISECONDS)
         .build()
 
