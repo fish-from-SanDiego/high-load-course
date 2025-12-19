@@ -60,7 +60,7 @@ class PaymentExternalSystemAdapterImpl(
         TimeUnit.MILLISECONDS,
         LinkedBlockingQueue(8_000),
         NamedThreadFactory("payment-external-executor-${accountName}"),
-        CallerBlockingRejectedExecutionHandler()
+        ThreadPoolExecutor.AbortPolicy()
     )
 
     private val httpConnectionPool = ConnectionPool(
