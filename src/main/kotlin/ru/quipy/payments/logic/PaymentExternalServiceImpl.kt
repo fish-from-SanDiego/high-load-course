@@ -2,10 +2,7 @@ package ru.quipy.payments.logic
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import okhttp3.Call
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody
+import okhttp3.*
 import org.slf4j.LoggerFactory
 import ru.quipy.common.utils.*
 import ru.quipy.core.EventSourcingService
@@ -66,7 +63,17 @@ class PaymentExternalSystemAdapterImpl(
         ThreadPoolExecutor.AbortPolicy()
     )
 
+    private val httpConnectionPool = ConnectionPool(
+        parallelRequests,
+        maxOf(
+            expectedProcessingTime.inWholeMilliseconds * 5,
+            Duration.ofSeconds(30).toMillis()
+        ),
+        TimeUnit.MILLISECONDS
+    )
+
     private val client = OkHttpClient.Builder()
+        .connectionPool(httpConnectionPool)
         .callTimeout(expectedProcessingTime.inWholeMilliseconds, TimeUnit.MILLISECONDS)
         .build()
 
