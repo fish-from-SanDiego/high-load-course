@@ -17,6 +17,7 @@ import java.net.SocketTimeoutException
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
@@ -52,17 +53,17 @@ class PaymentExternalSystemAdapterImpl(
     private val expectedRps =
         min(
             rateLimitPerSec.toDouble(),
-            parallelRequests / expectedProcessingTime.toDouble(DurationUnit.SECONDS)
+            parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
         )
 
     private val paymentExecutor = ThreadPoolExecutor(
-        16.coerceAtMost(parallelRequests),
         parallelRequests,
-        60L,
-        TimeUnit.SECONDS,
+        parallelRequests,
+        0L,
+        TimeUnit.MILLISECONDS,
         LinkedBlockingQueue(8_000),
         NamedThreadFactory("payment-external-executor-${accountName}"),
-        CallerBlockingRejectedExecutionHandler()
+        ThreadPoolExecutor.AbortPolicy()
     )
 
     private val client = OkHttpClient.Builder()
@@ -98,7 +99,14 @@ class PaymentExternalSystemAdapterImpl(
             return PaymentSubmissionResult.TooManyRequests(now() + expectedProcessingTime.inWholeMilliseconds)
         }
 
-        paymentExecutor.execute { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId, deadline) }
+        try {
+            paymentExecutor.submit { performPaymentTask(paymentId, amount, paymentStartedAt, transactionId, deadline) }
+        } catch (_: RejectedExecutionException) {
+            logTooManyRequests(transactionId, paymentId, paymentStartedAt)
+            return PaymentSubmissionResult.TooManyRequests(
+                now() + (paymentExecutor.queue.size.toDouble() / expectedRps * 1000).toLong()
+            )
+        }
         return PaymentSubmissionResult.Success(paymentStartedAt)
     }
 
