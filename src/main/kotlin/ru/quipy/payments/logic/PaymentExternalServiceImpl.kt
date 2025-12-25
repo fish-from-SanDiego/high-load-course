@@ -90,7 +90,6 @@ class PaymentExternalSystemAdapterImpl(
 
     private val retryDelayStrategy: RetryDelayStrategy = ExponentialBackoffDelayStrategy(
         expectedProcessingTime / 2
-//        Duration.ofMillis(350L)
     )
     private val maxRequestAttempts = 5
 
@@ -129,21 +128,6 @@ class PaymentExternalSystemAdapterImpl(
         transactionId: UUID,
         deadline: Long
     ) {
-        ongoingRequestsLimiter.acquire()
-        try {
-            performRequest(paymentId, transactionId, amount, deadline, paymentStartedAt)
-        } finally {
-            ongoingRequestsLimiter.release()
-        }
-    }
-
-    private fun performRequest(
-        paymentId: UUID,
-        transactionId: UUID,
-        amount: Int,
-        deadline: Long,
-        paymentStartedAt: Long,
-    ) {
         try {
             val request = Request.Builder().run {
                 url("http://$paymentProviderHostPort/external/process?serviceName=$serviceName&token=$token&accountName=$accountName&transactionId=$transactionId&paymentId=$paymentId&amount=$amount")
@@ -153,52 +137,54 @@ class PaymentExternalSystemAdapterImpl(
             val originalCall = client.newCall(request)
 
             for (attempt in 1..maxRequestAttempts) {
-                if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
-                    logger.warn("[$accountName] Not attempting request for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
-                    paymentESService.update(paymentId) {
-                        it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
+                ongoingRequestsLimiter.acquire()
+                val callResult = try {
+                    if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
+                        logger.warn("[$accountName] Not attempting request for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
+                        paymentESService.update(paymentId) {
+                            it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
+                        }
+                        appExecutor.submit {
+                            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+                        }
+                        return
                     }
+
+                    outgoingRateLimiter.tickBlocking()
+
                     appExecutor.submit {
-                        metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
-                    }
-                    return
-                }
-
-                val call = originalCall.clone()
-
-                outgoingRateLimiter.tickBlocking()
-
-                appExecutor.submit {
-                    metricsService.increaseSentPaymentRequestCounter(accountName)
-                    if (attempt != 1) {
-                        metricsService.increasePaymentRequestRetriesCounter(accountName)
-                    }
-                }
-
-                if (attempt == 1) {
-                    logger.warn("[$accountName] Submitting payment request for payment $paymentId")
-
-                    // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
-                    // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
-                    paymentESService.update(paymentId) {
-                        it.logSubmission(
-                            success = true,
-                            transactionId,
-                            now(),
-                            Duration.ofMillis(now() - paymentStartedAt)
-                        )
-                    }
-                    appExecutor.submit {
-                        metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
+                        metricsService.increaseSentPaymentRequestCounter(accountName)
+                        if (attempt != 1) {
+                            metricsService.increasePaymentRequestRetriesCounter(accountName)
+                        }
                     }
 
-                    logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
-                }
+                    if (attempt == 1) {
+                        logger.warn("[$accountName] Submitting payment request for payment $paymentId")
+
+                        // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
+                        // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
+                        paymentESService.update(paymentId) {
+                            it.logSubmission(
+                                success = true,
+                                transactionId,
+                                now(),
+                                Duration.ofMillis(now() - paymentStartedAt)
+                            )
+                        }
+                        appExecutor.submit {
+                            metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
+                        }
+
+                        logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
+                    }
 
 //                Supplier<T> может вернуть T?, но executeOnce не возвращает null
-                val callResult =
-                    metricsService.requestLatencyTimer(accountName).record<PaymentCallResult> { executeOnce(call) }!!
-
+                    metricsService.requestLatencyTimer(accountName)
+                        .record<PaymentCallResult> { executeOnce(originalCall.clone()) }!!
+                } finally {
+                    ongoingRequestsLimiter.release()
+                }
                 when (callResult) {
                     is PaymentCallResult.Success -> {
                         val body = callResult.response
