@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
 import io.ktor.client.engine.apache5.*
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.jetty.jakarta.Jetty
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -27,7 +29,6 @@ import java.util.concurrent.Executors
 import kotlin.math.min
 import kotlin.time.DurationUnit
 import kotlin.time.toKotlinDuration
-
 
 // Advice: always treat time as a Duration
 class PaymentExternalSystemAdapterImpl(
@@ -75,15 +76,14 @@ class PaymentExternalSystemAdapterImpl(
         Channel<suspend () -> Unit>(capacity = queueCapacity, onBufferOverflow = BufferOverflow.SUSPEND)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val client = HttpClient(Apache5) {
+    private val client = HttpClient(CIO) {
         engine {
-            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
-            customizeClient {
-
-            }
+            pipelining = true
+            dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+            requestTimeoutMillis = 20000
         }
     }
 
@@ -300,7 +300,7 @@ class PaymentExternalSystemAdapterImpl(
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
             val response = client.post(requestUrl) {
-                setBody(ByteArray(0))
+//                setBody(ByteArray(0))
             }
 
             response.headers["Retry-After"]?.let {
