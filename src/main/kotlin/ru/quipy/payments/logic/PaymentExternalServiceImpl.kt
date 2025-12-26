@@ -3,7 +3,7 @@ package ru.quipy.payments.logic
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
-import io.ktor.client.engine.jetty.jakarta.*
+import io.ktor.client.engine.java.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -11,7 +11,6 @@ import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.slf4j.LoggerFactory
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
 import ru.quipy.common.utils.LeakingBucketRateLimiter
@@ -74,20 +73,51 @@ class PaymentExternalSystemAdapterImpl(
     private val eventQueue =
         Channel<suspend () -> Unit>(capacity = queueCapacity, onBufferOverflow = BufferOverflow.SUSPEND)
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val client = HttpClient(Jetty) {
+//    private val client = HttpClient(OkHttp) {
+//        engine {
+//            preconfigured = OkHttpClient.Builder()
+//                .callTimeout(expectedProcessingTime.toJavaDuration())
+//                .connectionPool(
+//                    ConnectionPool(
+//                        ceil(parallelRequests.toDouble() / 100).toInt(),
+//                        30,
+//                        TimeUnit.SECONDS
+//                    )
+//                )
+//                .protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE))
+//                .build()
+//            dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
+//            pipelining = true
+//        }
+//    }
+
+    //    @OptIn(ExperimentalCoroutinesApi::class)
+//    private val client = HttpClient(Jetty) {
+//        engine {
+//            sslContextFactory = SslContextFactory.Client()
+//            clientCacheSize = 10
+//            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+//            configureClient {
+//                it.run {
+//                    isUseALPN = true
+//                    protocols = listOf("h2_prior_knowledge")
+//                    streamIdleTimeout = expectedProcessingTime.inWholeMilliseconds
+//                }
+//            }
+//        }
+//        install(HttpTimeout) {
+//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+//        }
+//    }
+    private val client = HttpClient(Java) {
         engine {
-            sslContextFactory = SslContextFactory.Client()
-            clientCacheSize = 50
-            dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
-            configureClient{
-                it.run {
-                    protocols= listOf("http/2")
-                }
-            }
+            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+            pipelining = true
+            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
+
         }
         install(HttpTimeout) {
-                requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
         }
     }
 
@@ -134,6 +164,7 @@ class PaymentExternalSystemAdapterImpl(
         deadline: Long
     ): PaymentSubmissionResult {
         val transactionId = UUID.randomUUID()
+//        val s: JettyHttp2Engine = null
 
         if (!incomingRateLimiter.tick()) {
             logTooManyRequests(transactionId, paymentId, paymentStartedAt)
@@ -296,7 +327,10 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            val response = client.post(requestUrl)
+            val response = client.post(requestUrl) {
+                setBody(ByteArray(0))
+            }
+            logger.info("protocol is ${response.version}")
             response.headers["Retry-After"]?.let {
                 return try {
                     PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")

@@ -1,5 +1,6 @@
 package ru.quipy.apigateway
 
+import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -63,10 +64,14 @@ class APIController {
     }
 
     @PostMapping("/orders/{orderId}/payment")
-    fun payOrder(@PathVariable orderId: UUID, @RequestParam deadline: Long): ResponseEntity<PaymentSubmissionDto> {
+    fun payOrder(
+        @PathVariable orderId: UUID,
+        @RequestParam deadline: Long,
+        request: HttpServletRequest,
+    ): ResponseEntity<PaymentSubmissionDto> {
 //        Запросы с неправильным orderId, обработка которых не дойдёт до processPayment, тоже учитываются!
         paymentMetricsService.increaseReceivedPaymentRequestCounter()
-
+//        logger.info("request protocol for orderId ${orderId}: ${request.protocol}")
         val paymentId = UUID.randomUUID()
         val order = orderRepository.findById(orderId)?.let {
             orderRepository.save(it.copy(status = OrderStatus.PAYMENT_IN_PROGRESS))
@@ -74,6 +79,7 @@ class APIController {
         } ?: throw IllegalArgumentException("No such order $orderId")
 
 
+//        return ResponseEntity.ok(PaymentSubmissionDto(System.currentTimeMillis(), paymentId))
         val paymentSubmissionResult = orderPayer.processPayment(orderId, order.price, paymentId, deadline)
         return when (paymentSubmissionResult) {
             is PaymentSubmissionResult.Success ->
