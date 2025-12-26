@@ -3,9 +3,7 @@ package ru.quipy.payments.logic
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
-import io.ktor.client.engine.apache5.*
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.engine.cio.endpoint
+import io.ktor.client.engine.jetty.*
 import io.ktor.client.engine.jetty.jakarta.Jetty
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -14,6 +12,7 @@ import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
+import org.eclipse.jetty.util.ssl.SslContextFactory
 import org.slf4j.LoggerFactory
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
 import ru.quipy.common.utils.LeakingBucketRateLimiter
@@ -61,9 +60,9 @@ class PaymentExternalSystemAdapterImpl(
         )
 
     private val paymentDispatcher =
-        Executors.newFixedThreadPool(32).asCoroutineDispatcher()
+        Executors.newFixedThreadPool(16).asCoroutineDispatcher()
     private val eventDispatcher =
-        Executors.newFixedThreadPool(32).asCoroutineDispatcher()
+        Executors.newFixedThreadPool(16).asCoroutineDispatcher()
 
     private val paymentScope =
         CoroutineScope(SupervisorJob() + paymentDispatcher)
@@ -76,22 +75,27 @@ class PaymentExternalSystemAdapterImpl(
     private val eventQueue =
         Channel<suspend () -> Unit>(capacity = queueCapacity, onBufferOverflow = BufferOverflow.SUSPEND)
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val client = HttpClient(CIO) {
-        engine {
-            pipelining = true
-            dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
-            maxConnectionsCount = 1000
-
-            endpoint {
-                maxConnectionsPerRoute = 1000
-                keepAliveTime = 100000
-            }
-        }
-        install(HttpTimeout) {
+    //    @OptIn(ExperimentalCoroutinesApi::class)
+//    private val client = HttpClient(CIO) {
+//        engine {
+//            pipelining = true
+//            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+//            maxConnectionsCount = 500
+//
+//            endpoint {
+//                maxConnectionsPerRoute = 500
+//            }
+//        }
+//        install(HttpTimeout) {
+////            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
 //            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-            requestTimeoutMillis = 20000
-            connectTimeoutMillis = 20000
+//            connectTimeoutMillis = 20000
+//        }
+//    }
+    private val client = HttpClient(Jetty) {
+        engine {
+            sslContextFactory = SslContextFactory.Client()
+            clientCacheSize = 12
         }
     }
 
@@ -337,8 +341,7 @@ class PaymentExternalSystemAdapterImpl(
             }
         } catch (_: SocketTimeoutException) {
             PaymentCallResult.RetryableFailure("Socket timeout")
-        }
-        catch (_: HttpRequestTimeoutException) {
+        } catch (_: HttpRequestTimeoutException) {
             PaymentCallResult.RetryableFailure("Request timeout")
         }
     }
