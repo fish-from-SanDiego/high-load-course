@@ -78,8 +78,13 @@ class PaymentExternalSystemAdapterImpl(
     private val client = HttpClient(Jetty) {
         engine {
             sslContextFactory = SslContextFactory.Client()
-            clientCacheSize = 100
+            clientCacheSize = 50
             dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
+            configureClient{
+                it.run {
+                    protocols= listOf("http/2")
+                }
+            }
         }
         install(HttpTimeout) {
                 requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
