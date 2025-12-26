@@ -59,9 +59,9 @@ class PaymentExternalSystemAdapterImpl(
         )
 
     private val paymentDispatcher =
-        Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+        Executors.newFixedThreadPool(32).asCoroutineDispatcher()
     private val eventDispatcher =
-        Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+        Executors.newFixedThreadPool(32).asCoroutineDispatcher()
 
     private val paymentScope =
         CoroutineScope(SupervisorJob() + paymentDispatcher)
@@ -78,8 +78,8 @@ class PaymentExternalSystemAdapterImpl(
     private val client = HttpClient(Jetty) {
         engine {
             sslContextFactory = SslContextFactory.Client()
-            clientCacheSize = 10
-            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+            clientCacheSize = 100
+            dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
         }
         install(HttpTimeout) {
                 requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
@@ -94,7 +94,7 @@ class PaymentExternalSystemAdapterImpl(
                 }
             }
         }
-        repeat(16) {
+        repeat(parallelRequests) {
             eventScope.launch {
                 for (task in eventQueue) {
                     task()
