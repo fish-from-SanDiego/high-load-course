@@ -3,6 +3,8 @@ package ru.quipy.payments.logic
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.cio.endpoint
 import io.ktor.client.engine.jetty.*
 import io.ktor.client.engine.jetty.jakarta.Jetty
 import io.ktor.client.plugins.*
@@ -75,29 +77,29 @@ class PaymentExternalSystemAdapterImpl(
     private val eventQueue =
         Channel<suspend () -> Unit>(capacity = queueCapacity, onBufferOverflow = BufferOverflow.SUSPEND)
 
-    //    @OptIn(ExperimentalCoroutinesApi::class)
-//    private val client = HttpClient(CIO) {
-//        engine {
-//            pipelining = true
-//            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
-//            maxConnectionsCount = 500
-//
-//            endpoint {
-//                maxConnectionsPerRoute = 500
-//            }
-//        }
-//        install(HttpTimeout) {
-////            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-//            connectTimeoutMillis = 20000
-//        }
-//    }
-    private val client = HttpClient(Jetty) {
+        @OptIn(ExperimentalCoroutinesApi::class)
+    private val client = HttpClient(CIO) {
         engine {
-            sslContextFactory = SslContextFactory.Client()
-            clientCacheSize = 100
+            pipelining = true
+            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+            maxConnectionsCount = 1000
+
+            endpoint {
+                maxConnectionsPerRoute = 1000
+            }
+        }
+        install(HttpTimeout) {
+//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+            connectTimeoutMillis = 20000
         }
     }
+//    private val client = HttpClient(Jetty) {
+//        engine {
+//            sslContextFactory = SslContextFactory.Client()
+//            clientCacheSize = 100
+//        }
+//    }
 
     init {
         repeat(parallelRequests) {
