@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
 import io.ktor.client.engine.apache5.*
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.cio.endpoint
 import io.ktor.client.engine.jetty.jakarta.Jetty
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -80,10 +81,17 @@ class PaymentExternalSystemAdapterImpl(
         engine {
             pipelining = true
             dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
+            maxConnectionsCount = 1000
+
+            endpoint {
+                maxConnectionsPerRoute = 1000
+                keepAliveTime = 100000
+            }
         }
         install(HttpTimeout) {
 //            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
             requestTimeoutMillis = 20000
+            connectTimeoutMillis = 20000
         }
     }
 
