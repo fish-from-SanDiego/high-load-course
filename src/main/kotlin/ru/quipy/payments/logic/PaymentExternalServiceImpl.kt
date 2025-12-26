@@ -95,7 +95,7 @@ class PaymentExternalSystemAdapterImpl(
     private val client = HttpClient(Jetty) {
         engine {
             sslContextFactory = SslContextFactory.Client()
-            clientCacheSize = 12
+            clientCacheSize = 100
         }
     }
 
