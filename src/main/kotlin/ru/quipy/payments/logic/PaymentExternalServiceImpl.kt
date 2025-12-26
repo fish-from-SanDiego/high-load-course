@@ -3,10 +3,7 @@ package ru.quipy.payments.logic
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.engine.cio.endpoint
-import io.ktor.client.engine.jetty.*
-import io.ktor.client.engine.jetty.jakarta.Jetty
+import io.ktor.client.engine.jetty.jakarta.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -77,29 +74,17 @@ class PaymentExternalSystemAdapterImpl(
     private val eventQueue =
         Channel<suspend () -> Unit>(capacity = queueCapacity, onBufferOverflow = BufferOverflow.SUSPEND)
 
-        @OptIn(ExperimentalCoroutinesApi::class)
-    private val client = HttpClient(CIO) {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val client = HttpClient(Jetty) {
         engine {
-            pipelining = true
+            sslContextFactory = SslContextFactory.Client()
+            clientCacheSize = 10
             dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
-            maxConnectionsCount = 1000
-
-            endpoint {
-                maxConnectionsPerRoute = 1000
-            }
         }
         install(HttpTimeout) {
-//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-            connectTimeoutMillis = 20000
+                requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
         }
     }
-//    private val client = HttpClient(Jetty) {
-//        engine {
-//            sslContextFactory = SslContextFactory.Client()
-//            clientCacheSize = 100
-//        }
-//    }
 
     init {
         repeat(parallelRequests) {
@@ -108,6 +93,8 @@ class PaymentExternalSystemAdapterImpl(
                     task()
                 }
             }
+        }
+        repeat(16) {
             eventScope.launch {
                 for (task in eventQueue) {
                     task()
@@ -127,22 +114,13 @@ class PaymentExternalSystemAdapterImpl(
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests)
 
     private val retryDelayStrategy: RetryDelayStrategy = ExponentialBackoffDelayStrategy(
-        expectedProcessingTime / 2
+        requestAverageProcessingTime.dividedBy(2)
     )
     private val maxRequestAttempts = 5
 
 //    init {
 //        metricsService.registerPaymentExecutorGauges(paymentExecutor, accountName)
 //    }
-
-    suspend fun preconnect() {
-        try {
-            client.get("http://$paymentProviderHostPort") {
-                timeout { requestTimeoutMillis = 1000 }
-            }
-        } catch (_: Exception) {
-        }
-    }
 
     override fun performPaymentAsync(
         paymentId: UUID,
@@ -313,10 +291,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            val response = client.post(requestUrl) {
-//                setBody(ByteArray(0))
-            }
-
+            val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
                     PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")
