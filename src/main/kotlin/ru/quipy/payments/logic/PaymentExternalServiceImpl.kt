@@ -310,9 +310,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            val response = client.post(requestUrl) {
-                setBody(ByteArray(0))
-            }
+            val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
                     PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")
