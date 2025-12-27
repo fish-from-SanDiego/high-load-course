@@ -97,7 +97,7 @@ class PaymentExternalSystemAdapterImpl(
         engine {
             dispatcher = Dispatchers.IO.limitedParallelism(16)
             pipelining = false
-            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
+            protocolVersion = java.net.http.HttpClient.Version.HTTP_1_1
         }
         install(HttpTimeout) {
             requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
