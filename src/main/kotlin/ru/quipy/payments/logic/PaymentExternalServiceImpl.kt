@@ -195,8 +195,6 @@ class PaymentExternalSystemAdapterImpl(
                         return
                     }
 
-                    outgoingRateLimiter.tickSuspending()
-
                     metricsService.increaseSentPaymentRequestCounter(accountName)
                     if (attempt != 1) {
                         metricsService.increasePaymentRequestRetriesCounter(accountName)
@@ -222,6 +220,7 @@ class PaymentExternalSystemAdapterImpl(
                         logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
                     }
 
+                    outgoingRateLimiter.tickSuspending()
                     val requestStartMillis = now()
                     val callResult = executeOnce(requestUrl)
                     metricsService.requestDurationTimer(accountName)
