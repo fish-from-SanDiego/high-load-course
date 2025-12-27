@@ -96,7 +96,7 @@ class PaymentExternalSystemAdapterImpl(
     private val client = HttpClient(Java) {
         engine {
             dispatcher = Dispatchers.IO.limitedParallelism(16)
-            pipelining = true
+            pipelining = false
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
         install(HttpTimeout) {
