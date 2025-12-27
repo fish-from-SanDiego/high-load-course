@@ -220,11 +220,11 @@ class PaymentExternalSystemAdapterImpl(
                         logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
                     }
 
-                    outgoingRateLimiter.tickSuspending()
-//                    val requestStartMillis = now()
+                    outgoingRateLimiter.tickBlocking()
+                    val requestStartMillis = now()
                     val callResult = executeOnce(requestUrl)
-//                    metricsService.requestDurationTimer(accountName)
-//                        .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
+                    metricsService.requestDurationTimer(accountName)
+                        .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
                     callResult
                 } finally {
                     ongoingRequestsLimiter.release()
