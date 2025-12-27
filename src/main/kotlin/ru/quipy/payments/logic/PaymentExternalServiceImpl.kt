@@ -194,6 +194,7 @@ class PaymentExternalSystemAdapterImpl(
                         metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
                         return
                     }
+                    outgoingRateLimiter.tickSuspending()
 
                     metricsService.increaseSentPaymentRequestCounter(accountName)
                     if (attempt != 1) {
@@ -219,8 +220,6 @@ class PaymentExternalSystemAdapterImpl(
 
                         logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
                     }
-
-                    outgoingRateLimiter.tickSuspending()
                     val requestStartMillis = now()
                     val callResult = executeOnce(requestUrl)
                     metricsService.requestDurationTimer(accountName)
