@@ -221,10 +221,10 @@ class PaymentExternalSystemAdapterImpl(
                     }
 
                     outgoingRateLimiter.tickSuspending()
-                    val requestStartMillis = now()
+//                    val requestStartMillis = now()
                     val callResult = executeOnce(requestUrl)
-                    metricsService.requestDurationTimer(accountName)
-                        .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
+//                    metricsService.requestDurationTimer(accountName)
+//                        .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
                     callResult
                 } finally {
                     ongoingRequestsLimiter.release()
