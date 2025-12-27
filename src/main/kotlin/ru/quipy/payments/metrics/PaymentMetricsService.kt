@@ -5,14 +5,15 @@ import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.Timer
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry
 import org.springframework.stereotype.Service
+import ru.quipy.common.utils.CountingChannel
 import java.util.concurrent.ThreadPoolExecutor
 
 @Service
 class PaymentMetricsService(
     private val metricsRegistry: PrometheusMeterRegistry
 ) {
-    fun requestLatencyTimer(accountName: String) = Timer
-        .builder("http_payment_request_latency_fish_from_sd")
+    fun requestDurationTimer(accountName: String) = Timer
+        .builder("http_payment_request_duration_fish_from_sd")
         .publishPercentiles(0.5, 0.75, 0.85, 0.90, 0.95, 0.99)
         .publishPercentileHistogram()
         .tags("accountName", accountName)
@@ -54,39 +55,46 @@ class PaymentMetricsService(
         .tags("result", result)
         .register(metricsRegistry).increment()
 
-    fun registerPaymentExecutorGauges(
-        executor: ThreadPoolExecutor,
+    fun <E> registerChannelGauges(
+        channel: CountingChannel<E>,
+        channelName: String,
         accountName: String
     ) {
         Gauge.builder(
-            "payment_executor_active_threads_fish_from_sd",
+            "${channelName}_size_fish_from_sd",
+            channel
+        ) { it.size().toDouble() }
+            .description("Size of ${channelName} channel")
+            .tag("accountName", accountName)
+            .register(metricsRegistry)
+    }
+
+    fun registerExecutorGauges(
+        executor: ThreadPoolExecutor,
+        executorName: String,
+        accountName: String
+    ) {
+        Gauge.builder(
+            "${executorName}_active_threads_fish_from_sd",
             executor
         ) { it.activeCount.toDouble() }
-            .description("Number of active threads in payment executor")
+            .description("Number of active threads in ${executorName}")
             .tag("accountName", accountName)
             .register(metricsRegistry)
 
         Gauge.builder(
-            "payment_executor_pool_size_fish_from_sd",
+            "${executorName}_threads_in_pool_fish_from_sd",
             executor
         ) { it.poolSize.toDouble() }
-            .description("Current pool size of payment executor")
+            .description("Number of threads in ${executorName}")
             .tag("accountName", accountName)
             .register(metricsRegistry)
 
         Gauge.builder(
-            "payment_executor_queue_size_fish_from_sd",
+            "${executorName}_queue_size_fish_from_sd",
             executor
-        ) { it.queue.size.toDouble() }
-            .description("Number of tasks waiting in payment executor queue")
-            .tag("accountName", accountName)
-            .register(metricsRegistry)
-
-        Gauge.builder(
-            "payment_executor_queue_remaining_capacity_fish_from_sd",
-            executor
-        ) { it.queue.remainingCapacity().toDouble() }
-            .description("Remaining capacity of payment executor queue")
+        ) { it.activeCount.toDouble() }
+            .description("Size of ${executorName} queue")
             .tag("accountName", accountName)
             .register(metricsRegistry)
     }

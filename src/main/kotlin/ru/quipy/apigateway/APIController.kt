@@ -71,7 +71,6 @@ class APIController {
     ): ResponseEntity<PaymentSubmissionDto> {
 //        Запросы с неправильным orderId, обработка которых не дойдёт до processPayment, тоже учитываются!
         paymentMetricsService.increaseReceivedPaymentRequestCounter()
-//        logger.info("request protocol for orderId ${orderId}: ${request.protocol}")
         val paymentId = UUID.randomUUID()
         val order = orderRepository.findById(orderId)?.let {
             orderRepository.save(it.copy(status = OrderStatus.PAYMENT_IN_PROGRESS))
@@ -79,7 +78,6 @@ class APIController {
         } ?: throw IllegalArgumentException("No such order $orderId")
 
 
-//        return ResponseEntity.ok(PaymentSubmissionDto(System.currentTimeMillis(), paymentId))
         val paymentSubmissionResult = orderPayer.processPayment(orderId, order.price, paymentId, deadline)
         return when (paymentSubmissionResult) {
             is PaymentSubmissionResult.Success ->

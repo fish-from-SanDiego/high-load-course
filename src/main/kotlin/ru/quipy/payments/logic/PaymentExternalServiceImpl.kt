@@ -12,6 +12,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import org.slf4j.LoggerFactory
+import ru.quipy.common.utils.CountingChannel
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
 import ru.quipy.common.utils.LeakingBucketRateLimiter
 import ru.quipy.common.utils.RetryDelayStrategy
@@ -24,7 +25,10 @@ import ru.quipy.payments.metrics.PaymentMetricsService
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.Executors
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import kotlin.math.min
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toKotlinDuration
 
@@ -57,61 +61,41 @@ class PaymentExternalSystemAdapterImpl(
             parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
         )
 
+    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(32) as ThreadPoolExecutor
     private val paymentDispatcher =
-        Executors.newFixedThreadPool(32).asCoroutineDispatcher()
-    private val eventDispatcher =
-        Executors.newFixedThreadPool(32).asCoroutineDispatcher()
-
+        paymentExecutor.asCoroutineDispatcher()
     private val paymentScope =
         CoroutineScope(SupervisorJob() + paymentDispatcher)
+
+    private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(32) as ThreadPoolExecutor
+    private val eventDispatcher =
+        eventExecutor.asCoroutineDispatcher()
+
+
     private val eventScope =
         CoroutineScope(SupervisorJob() + eventDispatcher)
 
     private val queueCapacity = 50_000
-    private val paymentQueue = Channel<suspend () -> Unit>(capacity = queueCapacity)
+    private val paymentQueue =
+        CountingChannel<suspend () -> Unit>(
+            Channel<suspend () -> Unit>(
+                capacity = queueCapacity,
+                onBufferOverflow = BufferOverflow.SUSPEND
+            )
+        )
 
     private val eventQueue =
-        Channel<suspend () -> Unit>(capacity = queueCapacity, onBufferOverflow = BufferOverflow.SUSPEND)
+        CountingChannel<suspend () -> Unit>(
+            Channel<suspend () -> Unit>(
+                capacity = queueCapacity,
+                onBufferOverflow = BufferOverflow.SUSPEND
+            )
+        )
 
-//    private val client = HttpClient(OkHttp) {
-//        engine {
-//            preconfigured = OkHttpClient.Builder()
-//                .callTimeout(expectedProcessingTime.toJavaDuration())
-//                .connectionPool(
-//                    ConnectionPool(
-//                        ceil(parallelRequests.toDouble() / 100).toInt(),
-//                        30,
-//                        TimeUnit.SECONDS
-//                    )
-//                )
-//                .protocols(listOf(Protocol.H2_PRIOR_KNOWLEDGE))
-//                .build()
-//            dispatcher = Executors.newFixedThreadPool(32).asCoroutineDispatcher()
-//            pipelining = true
-//        }
-//    }
-
-    //    @OptIn(ExperimentalCoroutinesApi::class)
-//    private val client = HttpClient(Jetty) {
-//        engine {
-//            sslContextFactory = SslContextFactory.Client()
-//            clientCacheSize = 10
-//            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
-//            configureClient {
-//                it.run {
-//                    isUseALPN = true
-//                    protocols = listOf("h2_prior_knowledge")
-//                    streamIdleTimeout = expectedProcessingTime.inWholeMilliseconds
-//                }
-//            }
-//        }
-//        install(HttpTimeout) {
-//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-//        }
-//    }
+    @OptIn(ExperimentalCoroutinesApi::class)
     private val client = HttpClient(Java) {
         engine {
-            dispatcher = Executors.newFixedThreadPool(16).asCoroutineDispatcher()
+            dispatcher = Dispatchers.IO.limitedParallelism(16)
             pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
 
@@ -129,7 +113,7 @@ class PaymentExternalSystemAdapterImpl(
                 }
             }
         }
-        repeat(parallelRequests) {
+        repeat(32) {
             eventScope.launch {
                 for (task in eventQueue) {
                     task()
@@ -149,13 +133,16 @@ class PaymentExternalSystemAdapterImpl(
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests)
 
     private val retryDelayStrategy: RetryDelayStrategy = ExponentialBackoffDelayStrategy(
-        requestAverageProcessingTime.dividedBy(2)
+       accountOptions.baseRetryDelay ?: 100.milliseconds
     )
     private val maxRequestAttempts = 5
 
-//    init {
-//        metricsService.registerPaymentExecutorGauges(paymentExecutor, accountName)
-//    }
+    init {
+        metricsService.registerChannelGauges(paymentQueue, "payment_queue", accountName)
+        metricsService.registerChannelGauges(eventQueue, "event_queue", accountName)
+        metricsService.registerExecutorGauges(paymentExecutor, "payment_executor", accountName)
+        metricsService.registerExecutorGauges(eventExecutor, "payment_event_executor", accountName)
+    }
 
     override fun performPaymentAsync(
         paymentId: UUID,
@@ -164,7 +151,6 @@ class PaymentExternalSystemAdapterImpl(
         deadline: Long
     ): PaymentSubmissionResult {
         val transactionId = UUID.randomUUID()
-//        val s: JettyHttp2Engine = null
 
         if (!incomingRateLimiter.tick()) {
             logTooManyRequests(transactionId, paymentId, paymentStartedAt)
@@ -205,15 +191,15 @@ class PaymentExternalSystemAdapterImpl(
                                 it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
                             }
                         }
-//                        metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+                        metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
                         return
                     }
 
                     outgoingRateLimiter.tickSuspending()
 
-//                    metricsService.increaseSentPaymentRequestCounter(accountName)
+                    metricsService.increaseSentPaymentRequestCounter(accountName)
                     if (attempt != 1) {
-//                        metricsService.increasePaymentRequestRetriesCounter(accountName)
+                        metricsService.increasePaymentRequestRetriesCounter(accountName)
                     }
 
                     if (attempt == 1) {
@@ -231,15 +217,15 @@ class PaymentExternalSystemAdapterImpl(
                                 )
                             }
                         }
-//                        metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
+                        metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
 
                         logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
                     }
 
                     val requestStartMillis = now()
                     val callResult = executeOnce(requestUrl)
-//                    metricsService.requestLatencyTimer(accountName)
-//                        .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
+                    metricsService.requestDurationTimer(accountName)
+                        .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
                     callResult
                 } finally {
                     ongoingRequestsLimiter.release()
@@ -256,12 +242,12 @@ class PaymentExternalSystemAdapterImpl(
                                 it.logProcessing(body.result, now(), transactionId, reason = body.message)
                             }
                         }
-//                        metricsService.increaseProcessedPaymentRequestCounter(
-//                            if (body.result == false)
-//                                "FAIL - ${body.message}"
-//                            else
-//                                "SUCCESS"
-//                        )
+                        metricsService.increaseProcessedPaymentRequestCounter(
+                            if (body.result == false)
+                                "FAIL - ${body.message}"
+                            else
+                                "SUCCESS"
+                        )
                         return
                     }
 
@@ -297,9 +283,9 @@ class PaymentExternalSystemAdapterImpl(
                                 it.logProcessing(false, now(), transactionId, reason = callResult.reason)
                             }
                         }
-//                        metricsService.increaseProcessedPaymentRequestCounter(
-//                            "FAIL - ${callResult.reason}"
-//                        )
+                        metricsService.increaseProcessedPaymentRequestCounter(
+                            "FAIL - ${callResult.reason}"
+                        )
                         return
                     }
                 }
@@ -311,7 +297,7 @@ class PaymentExternalSystemAdapterImpl(
                     it.logProcessing(false, now(), transactionId, reason = "Retries exhausted")
                 }
             }
-//            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
+            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
         } catch (e: Exception) {
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId", e)
             eventQueue.send {
@@ -319,9 +305,9 @@ class PaymentExternalSystemAdapterImpl(
                     it.logProcessing(false, now(), transactionId, reason = e.message)
                 }
             }
-//            metricsService.increaseProcessedPaymentRequestCounter(
-//                "FAIL - ${e.message}"
-//            )
+            metricsService.increaseProcessedPaymentRequestCounter(
+                "FAIL - ${e.message}"
+            )
         }
     }
 
@@ -330,7 +316,6 @@ class PaymentExternalSystemAdapterImpl(
             val response = client.post(requestUrl) {
                 setBody(ByteArray(0))
             }
-            logger.info("protocol is ${response.version}")
             response.headers["Retry-After"]?.let {
                 return try {
                     PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")
@@ -377,7 +362,7 @@ class PaymentExternalSystemAdapterImpl(
                     it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
                 }
             }
-//            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
             return false
         }
 
@@ -403,10 +388,10 @@ class PaymentExternalSystemAdapterImpl(
         }
 
 
-//        metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
-//        metricsService.increaseProcessedPaymentRequestCounter(
-//            "FAIL - Too many requests from clients"
-//        )
+        metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
+        metricsService.increaseProcessedPaymentRequestCounter(
+            "FAIL - Too many requests from clients"
+        )
     }
 
     override fun price() = properties.price

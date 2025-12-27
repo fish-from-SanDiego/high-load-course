@@ -51,6 +51,9 @@ class PaymentAccountsConfig {
     @Value("#{\${payment.account-expected-processing-time-map}}")
     val expectedProcessingTimeMillisByAccount: Map<String, Int> = mapOf()
 
+    @Value("#{\${payment.account-base-retry-delay-map}}")
+    val baseRetryDelayTimeMillisByAccount: Map<String, Int> = mapOf()
+
     @Bean
     fun accountAdapters(paymentService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>): List<PaymentExternalSystemAdapter> {
         val request = HttpRequest.newBuilder()
@@ -77,7 +80,8 @@ class PaymentAccountsConfig {
                     token,
                     AccountOptions(
                         leakingBucketSizeByAccount.get(it.accountName),
-                        expectedProcessingTimeMillisByAccount.get(it.accountName)?.milliseconds
+                        expectedProcessingTimeMillisByAccount.get(it.accountName)?.milliseconds,
+                        baseRetryDelayTimeMillisByAccount.get(it.accountName)?.milliseconds,
                     )
                 )
             }
@@ -85,6 +89,7 @@ class PaymentAccountsConfig {
 
     public data class AccountOptions(
         val incomingRateLimiterBucketSize: Int?,
-        val expectedProcessingTime: Duration?
+        val expectedProcessingTime: Duration?,
+        val baseRetryDelay: Duration?
     )
 }
