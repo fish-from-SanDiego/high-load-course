@@ -11,7 +11,6 @@ import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.io.IOException
 import org.slf4j.LoggerFactory
 import ru.quipy.common.utils.CountingChannel
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
@@ -99,7 +98,6 @@ class PaymentExternalSystemAdapterImpl(
             dispatcher = Dispatchers.IO.limitedParallelism(16)
             pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
-
         }
         install(HttpTimeout) {
             requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
@@ -343,13 +341,7 @@ class PaymentExternalSystemAdapterImpl(
             PaymentCallResult.RetryableFailure("Socket timeout")
         } catch (_: HttpRequestTimeoutException) {
             PaymentCallResult.RetryableFailure("Request timeout")
-        } catch (e: IOException) {
-            if (e.message?.contains("RST_STREAM") ?: false) {
-                return PaymentCallResult.RetryableFailure("RST_STREAM received")
-            }
-            throw e
         }
-
     }
 
 
