@@ -11,6 +11,7 @@ import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.PriorityBlockingQueue
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration.Companion.milliseconds
 
 class SlidingWindowRateLimiter(
     private val rate: Long,
@@ -32,14 +33,9 @@ class SlidingWindowRateLimiter(
         }
     }
 
-    fun tickBlocking() {
-        while (true) {
-            val curSum = sum.get()
-            if (curSum >= rate) continue
-            if (sum.compareAndSet(curSum, curSum + 1)) {
-                queue.add(Measure(1, System.currentTimeMillis()))
-                return
-            }
+    suspend fun tickSuspending() {
+        while (!tick()) {
+            delay(10L)
         }
     }
 
