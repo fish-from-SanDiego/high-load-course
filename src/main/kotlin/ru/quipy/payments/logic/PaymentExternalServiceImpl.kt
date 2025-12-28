@@ -96,7 +96,7 @@ class PaymentExternalSystemAdapterImpl(
     private val client = HttpClient(Java) {
         engine {
             dispatcher = Dispatchers.IO.limitedParallelism(16)
-            pipelining = false
+            pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_1_1
         }
         install(HttpTimeout) {
@@ -132,7 +132,7 @@ class PaymentExternalSystemAdapterImpl(
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests)
 
     private val retryDelayStrategy: RetryDelayStrategy = ExponentialBackoffDelayStrategy(
-       accountOptions.baseRetryDelay ?: 100.milliseconds
+        accountOptions.baseRetryDelay ?: 100.milliseconds
     )
     private val maxRequestAttempts = 5
 
