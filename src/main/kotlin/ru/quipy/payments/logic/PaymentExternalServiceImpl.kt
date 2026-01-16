@@ -96,8 +96,8 @@ class PaymentExternalSystemAdapterImpl(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val client = HttpClient(Java) {
         engine {
-            dispatcher = Dispatchers.IO
-            pipelining = false
+            dispatcher = Dispatchers.IO.limitedParallelism(16)
+            pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
         install(HttpTimeout) {
@@ -134,7 +134,7 @@ class PaymentExternalSystemAdapterImpl(
         }
     }
 
-    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+    private val outgoingRateLimiter = SlidingWindowRateLimiter(1050, Duration.ofSeconds(1))
 
     private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
     private val incomingRateLimiter = LeakingBucketRateLimiter(
