@@ -67,7 +67,7 @@ class PaymentExternalSystemAdapterImpl(
     private val paymentScope =
         CoroutineScope(SupervisorJob() + paymentDispatcher)
 
-    private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(4) as ThreadPoolExecutor
+    private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(16) as ThreadPoolExecutor
     private val eventDispatcher =
         eventExecutor.asCoroutineDispatcher()
 
@@ -95,7 +95,7 @@ class PaymentExternalSystemAdapterImpl(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val client = HttpClient(Java) {
         engine {
-            dispatcher = Dispatchers.IO.limitedParallelism(16)
+            dispatcher = Dispatchers.IO
             pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
