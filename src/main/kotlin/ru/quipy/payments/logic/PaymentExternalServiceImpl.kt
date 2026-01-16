@@ -3,7 +3,8 @@ package ru.quipy.payments.logic
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
-import io.ktor.client.engine.jetty.jakarta.*
+import io.ktor.client.engine.java.*
+import io.ktor.client.engine.jetty.jakarta.Jetty
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -92,36 +93,36 @@ class PaymentExternalSystemAdapterImpl(
             )
         )
 
-//    @OptIn(ExperimentalCoroutinesApi::class)
-//    private val client = HttpClient(Java) {
-//        engine {
-//            dispatcher = Dispatchers.IO.limitedParallelism(16)
-//            pipelining = true
-//            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
-//        }
-//        install(HttpTimeout) {
-//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-//        }
-//    }
-
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val client = HttpClient(Jetty) {
+    private val client = HttpClient(Java) {
         engine {
             dispatcher = Dispatchers.IO.limitedParallelism(16)
             pipelining = true
-            clientCacheSize = 20
+            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
         install(HttpTimeout) {
             requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
         }
     }
 
-    init {
-        client.requestPipeline.intercept(HttpRequestPipeline.Before) {
-            outgoingRateLimiter.tickSuspending()
-            proceed()
-        }
-    }
+    //    @OptIn(ExperimentalCoroutinesApi::class)
+//    private val client = HttpClient(Jetty) {
+//        engine {
+//            dispatcher = Dispatchers.IO.limitedParallelism(16)
+//            pipelining = true
+//            clientCacheSize = 20
+//        }
+//        install(HttpTimeout) {
+//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+//        }
+//    }
+
+//    init {
+//        client.requestPipeline.intercept(HttpRequestPipeline.Before) {
+//            outgoingRateLimiter.tickSuspending()
+//            proceed()
+//        }
+//    }
 
 
     init {
@@ -329,7 +330,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-//            outgoingRateLimiter.tickSuspending()
+            outgoingRateLimiter.tickSuspending()
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
