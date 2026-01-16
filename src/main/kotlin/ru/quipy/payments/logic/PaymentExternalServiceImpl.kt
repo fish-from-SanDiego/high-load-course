@@ -2,6 +2,9 @@ package ru.quipy.payments.logic
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import io.github.resilience4j.kotlin.ratelimiter.executeSuspendFunction
+import io.github.resilience4j.ratelimiter.RateLimiterConfig
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry
 import io.ktor.client.*
 import io.ktor.client.engine.java.*
 import io.ktor.client.plugins.*
@@ -16,9 +19,7 @@ import ru.quipy.common.utils.CountingChannel
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
 import ru.quipy.common.utils.LeakingBucketRateLimiter
 import ru.quipy.common.utils.RetryDelayStrategy
-import ru.quipy.common.utils.suspending.FixedWindowRateLimiter
 import ru.quipy.common.utils.suspending.OngoingWindow
-import ru.quipy.common.utils.suspending.SlidingWindowRateLimiter
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
 import ru.quipy.payments.config.PaymentAccountsConfig.AccountOptions
@@ -32,6 +33,7 @@ import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toKotlinDuration
+
 
 // Advice: always treat time as a Duration
 class PaymentExternalSystemAdapterImpl(
@@ -142,8 +144,16 @@ class PaymentExternalSystemAdapterImpl(
         }
     }
 
-//    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
-    private val outgoingRateLimiter = SlidingWindowRateLimiter(275, Duration.ofMillis(250L))
+
+    private val outgoingRateLimiterConfig: RateLimiterConfig = RateLimiterConfig.custom()
+        .limitRefreshPeriod(Duration.ofSeconds(1))
+        .limitForPeriod(rateLimitPerSec)
+        .timeoutDuration(Duration.ofSeconds(10))
+        .build()
+
+    //    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+    private val outgoingRateLimiter =
+        RateLimiterRegistry.of(outgoingRateLimiterConfig).rateLimiter("${accountName} outgoing rl")
 //    private val outgoingRateLimiter = FixedWindowRateLimiter(220, 200L, TimeUnit.MILLISECONDS)
 
     private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
@@ -332,8 +342,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            outgoingRateLimiter.tickSuspending()
-            val response = client.post(requestUrl)
+            val response = outgoingRateLimiter.executeSuspendFunction { client.post(requestUrl) }
             response.headers["Retry-After"]?.let {
                 return try {
                     PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")
