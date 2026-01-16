@@ -142,8 +142,7 @@ class PaymentExternalSystemAdapterImpl(
         }
     }
 
-//    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
-    private val outgoingRateLimiter = SlidingWindowRateLimiter(1100, Duration.ofMillis(100L))
+    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
 
     private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
     private val incomingRateLimiter = LeakingBucketRateLimiter(
