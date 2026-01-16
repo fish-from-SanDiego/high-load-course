@@ -146,8 +146,8 @@ class PaymentExternalSystemAdapterImpl(
 
 
     private val outgoingRateLimiterConfig: RateLimiterConfig = RateLimiterConfig.custom()
-        .limitRefreshPeriod(Duration.ofSeconds(1))
-        .limitForPeriod(rateLimitPerSec)
+        .limitRefreshPeriod(Duration.ofMillis(100L))
+        .limitForPeriod(110)
         .timeoutDuration(Duration.ofSeconds(10))
         .build()
 
