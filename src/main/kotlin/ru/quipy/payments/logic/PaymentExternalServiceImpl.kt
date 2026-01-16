@@ -61,13 +61,13 @@ class PaymentExternalSystemAdapterImpl(
             parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
         )
 
-    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(32) as ThreadPoolExecutor
+    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(16) as ThreadPoolExecutor
     private val paymentDispatcher =
         paymentExecutor.asCoroutineDispatcher()
     private val paymentScope =
         CoroutineScope(SupervisorJob() + paymentDispatcher)
 
-    private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(16) as ThreadPoolExecutor
+    private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(4) as ThreadPoolExecutor
     private val eventDispatcher =
         eventExecutor.asCoroutineDispatcher()
 
@@ -330,7 +330,7 @@ class PaymentExternalSystemAdapterImpl(
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
             while (!outgoingRateLimiter.tick()) {
-                delay((75L..250L).random())
+                delay(20L)
             }
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
