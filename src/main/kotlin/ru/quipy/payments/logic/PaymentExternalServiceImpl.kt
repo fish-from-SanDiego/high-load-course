@@ -98,21 +98,20 @@ class PaymentExternalSystemAdapterImpl(
         engine {
             dispatcher = Dispatchers.IO.limitedParallelism(16)
             pipelining = true
-            protocolVersion = java.net.http.HttpClient.Version.HTTP_1_1
+            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
         install(HttpTimeout) {
             requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
         }
-
-        install(
-            createClientPlugin(
-                name = "SlidingWindowRateLimiter"
-            ) {
-                onRequest { _, _ ->
-                    outgoingRateLimiter.tickSuspending()
-                }
-            })
     }
+
+    init {
+        client.requestPipeline.intercept(HttpRequestPipeline.Before) {
+            outgoingRateLimiter.tickSuspending()
+            proceed()
+        }
+    }
+
 
 //    @OptIn(ExperimentalCoroutinesApi::class)
 //    private val client = HttpClient(Jetty) {
