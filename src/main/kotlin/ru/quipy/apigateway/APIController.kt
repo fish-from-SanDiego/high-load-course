@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import ru.quipy.orders.metrics.OrderMetricsService
 import ru.quipy.orders.repository.OrderRepository
 import ru.quipy.payments.logic.OrderPayer
 import ru.quipy.payments.logic.PaymentSubmissionResult
@@ -27,6 +28,8 @@ class APIController {
     @Autowired
     private lateinit var paymentMetricsService: PaymentMetricsService
 
+    @Autowired
+    private lateinit var orderMetricsService: OrderMetricsService
 
     @PostMapping("/users")
     fun createUser(@RequestBody req: CreateUserRequest): User {
@@ -46,7 +49,8 @@ class APIController {
             OrderStatus.COLLECTING,
             price,
         )
-        return orderRepository.save(order)
+
+        return orderMetricsService.orderSaveDurationTimer.record<Order> { orderRepository.save(order) }!!
     }
 
     data class Order(
@@ -72,10 +76,12 @@ class APIController {
 //        Запросы с неправильным orderId, обработка которых не дойдёт до processPayment, тоже учитываются!
         paymentMetricsService.increaseReceivedPaymentRequestCounter()
         val paymentId = UUID.randomUUID()
-        val order = orderRepository.findById(orderId)?.let {
-            orderRepository.save(it.copy(status = OrderStatus.PAYMENT_IN_PROGRESS))
-            it
-        } ?: throw IllegalArgumentException("No such order $orderId")
+        val order = orderMetricsService.orderFindDurationTimer.record<Order> {
+            orderRepository.findById(orderId)?.let {
+                orderRepository.save(it.copy(status = OrderStatus.PAYMENT_IN_PROGRESS))
+                it
+            } ?: throw IllegalArgumentException("No such order $orderId")
+        }!!
 
 
         val paymentSubmissionResult = orderPayer.processPayment(orderId, order.price, paymentId, deadline)

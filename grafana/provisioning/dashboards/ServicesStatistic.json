@@ -2748,8 +2748,8 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 6,
+        "w": 24,
         "x": 0,
         "y": 61
       },
@@ -2812,6 +2812,350 @@
       "fieldConfig": {
         "defaults": {
           "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 67
+      },
+      "id": 113,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": " rate(order_save_duration_fish_from_sd_seconds_sum[1m])\r\n/\r\n rate(order_save_duration_fish_from_sd_seconds_count[1m])* 1000\r\n",
+          "legendFormat": "average",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.5, sum(rate(order_save_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "median",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.75, sum(rate(order_save_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.75",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.85, sum(rate(order_save_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.85",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.9, sum(rate(order_save_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.9",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(order_save_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.95",
+          "range": true,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(order_save_duration_fish_from_sd_seconds_bucket[1m])) by (le)) * 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.99",
+          "range": true,
+          "refId": "G"
+        }
+      ],
+      "title": "Order save duration (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 67
+      },
+      "id": 114,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": " rate(order_find_duration_fish_from_sd_seconds_sum[1m])\r\n/\r\n rate(order_find_duration_fish_from_sd_seconds_count[1m])* 1000\r\n",
+          "legendFormat": "average",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.5, sum(rate(order_find_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "median",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.75, sum(rate(order_find_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.75",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.85, sum(rate(order_find_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.85",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.9, sum(rate(order_find_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.9",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(order_find_duration_fish_from_sd_seconds_bucket[1m])) by (le))* 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.95",
+          "range": true,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(order_find_duration_fish_from_sd_seconds_bucket[1m])) by (le)) * 1000",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "q0.99",
+          "range": true,
+          "refId": "G"
+        }
+      ],
+      "title": "Order find duration (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
             "mode": "thresholds"
           },
           "mappings": [],
@@ -2862,7 +3206,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 69
+        "y": 75
       },
       "id": 104,
       "options": {
@@ -2934,7 +3278,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 77
+        "y": 83
       },
       "id": 109,
       "panels": [],
@@ -3006,7 +3350,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 78
+        "y": 84
       },
       "id": 108,
       "options": {
@@ -3112,7 +3456,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 78
+        "y": 84
       },
       "id": 110,
       "options": {
@@ -3218,7 +3562,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 86
+        "y": 92
       },
       "id": 112,
       "options": {
@@ -3324,7 +3668,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 86
+        "y": 92
       },
       "id": 111,
       "options": {
@@ -3371,7 +3715,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 94
+        "y": 100
       },
       "id": 21,
       "panels": [],
@@ -3443,7 +3787,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 95
+        "y": 101
       },
       "id": 19,
       "options": {
@@ -3543,7 +3887,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 95
+        "y": 101
       },
       "id": 22,
       "options": {
@@ -3643,7 +3987,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 103
+        "y": 109
       },
       "id": 100,
       "options": {
@@ -3684,7 +4028,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 111
+        "y": 117
       },
       "id": 38,
       "panels": [],
@@ -3753,7 +4097,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 112
+        "y": 118
       },
       "id": 40,
       "options": {
@@ -3849,7 +4193,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 112
+        "y": 118
       },
       "id": 39,
       "options": {
@@ -3950,7 +4294,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 120
+        "y": 126
       },
       "id": 95,
       "options": {
@@ -4062,7 +4406,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 120
+        "y": 126
       },
       "id": 42,
       "options": {
@@ -4158,7 +4502,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 128
+        "y": 134
       },
       "id": 41,
       "options": {
@@ -4198,7 +4542,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 136
+        "y": 142
       },
       "id": 97,
       "panels": [
@@ -4833,5 +5177,5 @@
   "timezone": "",
   "title": "Services statistic",
   "uid": "KVr-Vmpnz",
-  "version": 41
+  "version": 43
 }
