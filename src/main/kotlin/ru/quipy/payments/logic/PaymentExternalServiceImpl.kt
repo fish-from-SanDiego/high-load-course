@@ -141,7 +141,8 @@ class PaymentExternalSystemAdapterImpl(
         }
     }
 
-    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+//    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
+    private val outgoingRateLimiter = SlidingWindowRateLimiter(110, Duration.ofMillis(100L))
 
     private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
     private val incomingRateLimiter = LeakingBucketRateLimiter(
@@ -329,9 +330,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            while (!outgoingRateLimiter.tick()) {
-                delay(20L)
-            }
+            outgoingRateLimiter.tickSuspending()
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
