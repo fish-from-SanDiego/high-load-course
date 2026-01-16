@@ -134,7 +134,7 @@ class PaymentExternalSystemAdapterImpl(
         }
     }
 
-    private val outgoingRateLimiter = SlidingWindowRateLimiter(1050, Duration.ofSeconds(1))
+    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
 
     private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
     private val incomingRateLimiter = LeakingBucketRateLimiter(
@@ -206,7 +206,6 @@ class PaymentExternalSystemAdapterImpl(
                         metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
                         return
                     }
-                    outgoingRateLimiter.tickSuspending()
 
                     metricsService.increaseSentPaymentRequestCounter(accountName)
                     if (attempt != 1) {
@@ -323,6 +322,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
+            outgoingRateLimiter.tickSuspending()
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
