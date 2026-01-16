@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.ktor.client.*
 import io.ktor.client.engine.java.*
+import io.ktor.client.engine.jetty.jakarta.Jetty
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -52,7 +53,8 @@ class PaymentExternalSystemAdapterImpl(
     private val requestAverageProcessingTime = properties.averageProcessingTime
     private val expectedProcessingTime =
         accountOptions.expectedProcessingTime ?: requestAverageProcessingTime.toKotlinDuration()
-    private val rateLimitPerSec = properties.rateLimitPerSec
+//    private val rateLimitPerSec = properties.rateLimitPerSec
+    private val rateLimitPerSec = 1050
     private val parallelRequests = properties.parallelRequests
 
     private val expectedRps =
@@ -329,9 +331,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            while (!outgoingRateLimiter.tick()) {
-                delay((75L..250L).random())
-            }
+            outgoingRateLimiter.tickSuspending()
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
