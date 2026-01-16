@@ -35,7 +35,7 @@ class SlidingWindowRateLimiter(
 
     suspend fun tickSuspending() {
         while (!tick()) {
-            continue
+            delay(30L)
         }
     }
 
