@@ -16,6 +16,7 @@ import ru.quipy.common.utils.CountingChannel
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
 import ru.quipy.common.utils.LeakingBucketRateLimiter
 import ru.quipy.common.utils.RetryDelayStrategy
+import ru.quipy.common.utils.suspending.FixedWindowRateLimiter
 import ru.quipy.common.utils.suspending.OngoingWindow
 import ru.quipy.common.utils.suspending.SlidingWindowRateLimiter
 import ru.quipy.core.EventSourcingService
@@ -142,7 +143,8 @@ class PaymentExternalSystemAdapterImpl(
     }
 
 //    private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
-    private val outgoingRateLimiter = SlidingWindowRateLimiter(110, Duration.ofMillis(100L))
+//    private val outgoingRateLimiter = SlidingWindowRateLimiter(110, Duration.ofMillis(100L))
+    private val outgoingRateLimiter = FixedWindowRateLimiter(110, 100L, TimeUnit.MILLISECONDS)
 
     private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
     private val incomingRateLimiter = LeakingBucketRateLimiter(
