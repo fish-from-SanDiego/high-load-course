@@ -94,7 +94,7 @@ class PaymentExternalSystemAdapterImpl(
         )
 
     private val httpClient = HttpClient.create()
-        .protocol(HttpProtocol.H2C)
+        .protocol(HttpProtocol.H2)
         .responseTimeout(Duration.ofMillis(expectedProcessingTime.inWholeMilliseconds))
     private val client = WebClient.builder()
         .clientConnector(ReactorClientHttpConnector(httpClient))
