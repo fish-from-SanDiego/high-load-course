@@ -2,17 +2,17 @@ package ru.quipy.payments.logic
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import io.ktor.client.*
+import io.ktor.client.engine.java.*
+import io.ktor.client.engine.jetty.jakarta.Jetty
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.reactor.awaitSingle
 import org.slf4j.LoggerFactory
-import org.springframework.http.client.reactive.ReactorClientHttpConnector
-import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.reactive.function.client.WebClientResponseException
-import reactor.netty.http.HttpProtocol
-import reactor.netty.http.client.HttpClient
-import reactor.netty.http.client.PrematureCloseException
 import ru.quipy.common.utils.CountingChannel
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
 import ru.quipy.common.utils.LeakingBucketRateLimiter
@@ -93,24 +93,17 @@ class PaymentExternalSystemAdapterImpl(
             )
         )
 
-    private val httpClient = HttpClient.create()
-        .protocol(HttpProtocol.H2)
-        .responseTimeout(Duration.ofMillis(expectedProcessingTime.inWholeMilliseconds))
-    private val client = WebClient.builder()
-        .clientConnector(ReactorClientHttpConnector(httpClient))
-        .build()
-
-//    @OptIn(ExperimentalCoroutinesApi::class)
-//    private val client = HttpClient(Java) {
-//        engine {
-//            dispatcher = Dispatchers.IO.limitedParallelism(16)
-//            pipelining = true
-//            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
-//        }
-//        install(HttpTimeout) {
-//            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
-//        }
-//    }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val client = HttpClient(Java) {
+        engine {
+            dispatcher = Dispatchers.IO.limitedParallelism(16)
+            pipelining = true
+            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+        }
+    }
 
     //    @OptIn(ExperimentalCoroutinesApi::class)
 //    private val client = HttpClient(Jetty) {
@@ -338,51 +331,35 @@ class PaymentExternalSystemAdapterImpl(
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
             outgoingRateLimiter.tickSuspending()
-
-            val responseEntity = try {
-                client.post()
-                    .uri(requestUrl)
-                    .retrieve()
-                    .toEntity(String::class.java)
-                    .awaitSingle()
-            } catch (e: WebClientResponseException) {
-                val status = e.statusCode.value()
-                if (status in 500..599) {
-                    return PaymentCallResult.RetryableFailure("HTTP $status")
-                } else {
-                    e.headers["Retry-After"]?.firstOrNull()?.let {
-                        return try {
-                            PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${e.statusCode.value()}")
-                        } catch (_: Exception) {
-                            return PaymentCallResult.FinalFailure("Invalid Retry-After header value")
-                        }
-                    }
-                    return PaymentCallResult.FinalFailure("HTTP $status")
+            val response = client.post(requestUrl)
+            response.headers["Retry-After"]?.let {
+                return try {
+                    PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")
+                } catch (_: Exception) {
+                    return PaymentCallResult.FinalFailure("Invalid Retry-After header value")
                 }
             }
 
-            val bodyText = responseEntity.body ?: return PaymentCallResult.FinalFailure("Empty response body")
-            val body = try {
-                mapper.readValue(bodyText, ExternalSysResponse::class.java)
-            } catch (_: Exception) {
-                return PaymentCallResult.FinalFailure("Invalid response body")
-            }
+            when (response.status.value) {
+                in 500..599 -> PaymentCallResult.RetryableFailure("HTTP ${response.status.value}")
+                else -> {
+                    val body = try {
+                        mapper.readValue(response.bodyAsText(), ExternalSysResponse::class.java)
+                    } catch (_: Exception) {
+                        return PaymentCallResult.FinalFailure("Invalid response body")
+                    }
 
-            when {
-                body.result == true -> PaymentCallResult.Success(body)
-                body.message == "Temporary error" -> PaymentCallResult.RetryableFailure(body.message)
-                else -> PaymentCallResult.FinalFailure(body.message ?: "External service error")
+                    when {
+                        body.result == true -> PaymentCallResult.Success(body)
+                        body.message == "Temporary error" -> PaymentCallResult.RetryableFailure(body.message)
+                        else -> PaymentCallResult.FinalFailure(body.message ?: "External service error")
+                    }
+                }
             }
-
-        } catch (e: Exception) {
-            when (e) {
-                is PrematureCloseException,
-                is java.util.concurrent.TimeoutException,
-                is io.netty.handler.timeout.TimeoutException
-                    -> PaymentCallResult.RetryableFailure("Request timeout")
-
-                else -> PaymentCallResult.FinalFailure(e.message ?: "Unknown error")
-            }
+        } catch (_: SocketTimeoutException) {
+            PaymentCallResult.RetryableFailure("Socket timeout")
+        } catch (_: HttpRequestTimeoutException) {
+            PaymentCallResult.RetryableFailure("Request timeout")
         }
     }
 
