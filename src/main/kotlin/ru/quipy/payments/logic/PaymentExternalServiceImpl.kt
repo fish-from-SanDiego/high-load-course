@@ -105,13 +105,6 @@ class PaymentExternalSystemAdapterImpl(
         }
     }
 
-    init {
-        client.requestPipeline.intercept(HttpRequestPipeline.Before) {
-            outgoingRateLimiter.tickSuspending()
-            proceed()
-        }
-    }
-
 
     init {
         repeat(parallelRequests) {
@@ -327,6 +320,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
+            outgoingRateLimiter.tickSuspending()
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
