@@ -106,7 +106,7 @@ class PaymentExternalSystemAdapterImpl(
     }
 
     init {
-        client.requestPipeline.intercept(HttpRequestPipeline.Send) {
+        client.requestPipeline.intercept(HttpRequestPipeline.Before) {
             outgoingRateLimiter.tickSuspending()
             proceed()
         }
