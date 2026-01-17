@@ -320,7 +320,9 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            outgoingRateLimiter.tickSuspending()
+            while (!outgoingRateLimiter.tick()) {
+                delay(100L)
+            }
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
