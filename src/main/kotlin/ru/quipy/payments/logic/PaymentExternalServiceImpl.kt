@@ -62,7 +62,7 @@ class PaymentExternalSystemAdapterImpl(
             parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
         )
 
-    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(32) as ThreadPoolExecutor
+    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(48) as ThreadPoolExecutor
     private val paymentDispatcher =
         paymentExecutor.asCoroutineDispatcher()
     private val paymentScope =
