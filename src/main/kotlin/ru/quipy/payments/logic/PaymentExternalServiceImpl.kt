@@ -2,10 +2,15 @@ package ru.quipy.payments.logic
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import io.ktor.client.*
+import io.ktor.client.engine.java.*
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.network.sockets.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.future.await
 import org.slf4j.LoggerFactory
 import ru.quipy.common.utils.CountingChannel
 import ru.quipy.common.utils.ExponentialBackoffDelayStrategy
@@ -17,19 +22,11 @@ import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
 import ru.quipy.payments.config.PaymentAccountsConfig.AccountOptions
 import ru.quipy.payments.metrics.PaymentMetricsService
-import java.net.ConnectException
-import java.net.SocketTimeoutException
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.net.http.HttpTimeoutException
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-import kotlin.jvm.optionals.getOrNull
 import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
@@ -96,12 +93,17 @@ class PaymentExternalSystemAdapterImpl(
             )
         )
 
-    private val client = HttpClient.newBuilder()
-        .version(HttpClient.Version.HTTP_2)
-        .executor(Executors.newFixedThreadPool(16))
-        .connectTimeout(Duration.ofSeconds(20))
-        .executor(paymentExecutor)
-        .build()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val client = HttpClient(Java) {
+        engine {
+            dispatcher = Dispatchers.IO.limitedParallelism(16)
+            pipelining = true
+            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+        }
+    }
 
 
     init {
@@ -321,29 +323,20 @@ class PaymentExternalSystemAdapterImpl(
             while (!outgoingRateLimiter.tick()) {
                 delay(100L)
             }
-            val request =
-                HttpRequest.newBuilder()
-                    .uri(URI.create(requestUrl))
-                    .timeout(Duration.ofMillis(expectedProcessingTime.inWholeMilliseconds))
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build()
-            val response = client
-                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .await()
-            response.headers()
-                .firstValue("Retry-After").getOrNull()?.let {
+            val response = client.post(requestUrl)
+            response.headers["Retry-After"]?.let {
                 return try {
-                    PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.statusCode()}")
+                    PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")
                 } catch (_: Exception) {
                     return PaymentCallResult.FinalFailure("Invalid Retry-After header value")
                 }
             }
 
-            when (response.statusCode()) {
-                in 500..599 -> PaymentCallResult.RetryableFailure("HTTP ${response.statusCode()}")
+            when (response.status.value) {
+                in 500..599 -> PaymentCallResult.RetryableFailure("HTTP ${response.status.value}")
                 else -> {
                     val body = try {
-                        mapper.readValue(response.body(), ExternalSysResponse::class.java)
+                        mapper.readValue(response.bodyAsText(), ExternalSysResponse::class.java)
                     } catch (_: Exception) {
                         return PaymentCallResult.FinalFailure("Invalid response body")
                     }
@@ -357,10 +350,8 @@ class PaymentExternalSystemAdapterImpl(
             }
         } catch (_: SocketTimeoutException) {
             PaymentCallResult.RetryableFailure("Socket timeout")
-        } catch (_: HttpTimeoutException) {
+        } catch (_: HttpRequestTimeoutException) {
             PaymentCallResult.RetryableFailure("Request timeout")
-        }catch (_: ConnectException) {
-            PaymentCallResult.RetryableFailure("Conenction error")
         }
     }
 
