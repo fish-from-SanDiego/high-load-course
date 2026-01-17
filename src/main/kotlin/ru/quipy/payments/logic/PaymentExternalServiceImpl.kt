@@ -96,7 +96,7 @@ class PaymentExternalSystemAdapterImpl(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val client = HttpClient(Java) {
         engine {
-            dispatcher = Dispatchers.IO
+            dispatcher = Dispatchers.IO.limitedParallelism(16)
             pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
