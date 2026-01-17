@@ -7,7 +7,7 @@ interface PaymentService {
     /**
      * Submit payment request to some external service.
      */
-    fun submitPaymentRequest(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long)
+    fun submitPaymentRequest(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) : PaymentSubmissionResult
 }
 
 /**
@@ -17,7 +17,7 @@ interface PaymentService {
 
  */
 interface PaymentExternalSystemAdapter {
-    fun performPaymentAsync(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long)
+    fun performPaymentAsync(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) : PaymentSubmissionResult
 
     fun name(): String
 
@@ -37,7 +37,17 @@ data class PaymentAccountProperties(
     val price: Int,
     val averageProcessingTime: Duration = Duration.ofSeconds(11),
     val enabled: Boolean,
-)
+) {
+    override fun toString(): String {
+        return "$accountName:\n" +
+                "serviceName='$serviceName'\n" +
+                "parallelRequests=$parallelRequests\n" +
+                "rateLimitPerSec=$rateLimitPerSec\n" +
+                "price=$price\n" +
+                "averageProcessingTime=$averageProcessingTime\n" +
+                "enabled=$enabled)\n"
+    }
+}
 
 /**
  * Describes response from external service.

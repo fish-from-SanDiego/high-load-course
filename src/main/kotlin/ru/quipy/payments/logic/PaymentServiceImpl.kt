@@ -1,16 +1,8 @@
 package ru.quipy.payments.logic
 
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
-import ru.quipy.common.utils.NamedThreadFactory
-import ru.quipy.core.EventSourcingService
-import ru.quipy.payments.api.PaymentAggregate
-import java.time.Duration
 import java.util.*
-import java.util.concurrent.Executors
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 
 @Service
@@ -21,9 +13,24 @@ class PaymentSystemImpl(
         val logger = LoggerFactory.getLogger(PaymentSystemImpl::class.java)
     }
 
-    override fun submitPaymentRequest(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
-        for (account in paymentAccounts) {
-            account.performPaymentAsync(paymentId, amount, paymentStartedAt, deadline)
-        }
+    override fun submitPaymentRequest(
+        paymentId: UUID,
+        amount: Int,
+        paymentStartedAt: Long,
+        deadline: Long
+    ): PaymentSubmissionResult {
+        return paymentAccounts.fold<PaymentExternalSystemAdapter, PaymentSubmissionResult?>(null) { bestResult, account ->
+            val result = account.performPaymentAsync(paymentId, amount, paymentStartedAt, deadline)
+
+            when {
+                result is PaymentSubmissionResult.Success -> return result
+                bestResult == null -> result
+                bestResult is PaymentSubmissionResult.TooManyRequests && result is PaymentSubmissionResult.TooManyRequests ->
+                    if (result.retryAfterTimestamp < bestResult.retryAfterTimestamp) result else bestResult
+
+                else -> bestResult
+            }
+        } ?: throw IllegalStateException("No payment results returned from any account")
     }
+
 }
