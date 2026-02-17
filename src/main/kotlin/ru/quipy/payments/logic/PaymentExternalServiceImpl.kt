@@ -100,8 +100,11 @@ class PaymentExternalSystemAdapterImpl(
             pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
-        install(HttpTimeout) {
-            requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+//        true or null
+        if (accountOptions.timeoutEnabled != false) {
+            install(HttpTimeout) {
+                requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
+            }
         }
     }
 
@@ -320,9 +323,7 @@ class PaymentExternalSystemAdapterImpl(
 
     private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
         return try {
-            while (!outgoingRateLimiter.tick()) {
-                delay(100L)
-            }
+            outgoingRateLimiter.tickSuspending()
             val response = client.post(requestUrl)
             response.headers["Retry-After"]?.let {
                 return try {
