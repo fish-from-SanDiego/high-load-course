@@ -62,13 +62,13 @@ class PaymentExternalSystemAdapterImpl(
             parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
         )
 
-    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(128) as ThreadPoolExecutor
+    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(40) as ThreadPoolExecutor
     private val paymentDispatcher =
         paymentExecutor.asCoroutineDispatcher()
     private val paymentScope =
         CoroutineScope(SupervisorJob() + paymentDispatcher)
 
-    private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(16) as ThreadPoolExecutor
+    private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(24) as ThreadPoolExecutor
     private val eventDispatcher =
         eventExecutor.asCoroutineDispatcher()
 
@@ -117,7 +117,7 @@ class PaymentExternalSystemAdapterImpl(
                 }
             }
         }
-        repeat(64) {
+        repeat(256) {
             eventScope.launch {
                 for (task in eventQueue) {
                     task()
@@ -126,15 +126,6 @@ class PaymentExternalSystemAdapterImpl(
         }
     }
 
-//    private val outgoingRateLimiter = FixedWindowRateLimiter(220, 200L, TimeUnit.MILLISECONDS)
-
-    //    private val outgoingRateLimiterConfig: RateLimiterConfig = RateLimiterConfig.custom()
-//        .limitRefreshPeriod(Duration.ofMillis(100L))
-//        .limitForPeriod(110)
-//        .timeoutDuration(Duration.ofSeconds(10))
-//        .build()
-//    private val outgoingRateLimiter =
-//        RateLimiterRegistry.of(outgoingRateLimiterConfig).rateLimiter("${accountName} outgoing rl")
     private val outgoingRateLimiter = SlidingWindowRateLimiter(rateLimitPerSec.toLong(), Duration.ofSeconds(1))
 
     private val incomingRateLimiterRate = expectedRps.toInt().coerceAtLeast(1)
@@ -199,7 +190,7 @@ class PaymentExternalSystemAdapterImpl(
                 val callResult = try {
                     if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
                         logger.warn("[$accountName] Not attempting request for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
-                        eventQueue.send {
+                        eventQueue.trySend {
                             paymentESService.update(paymentId) {
                                 it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
                             }
@@ -216,7 +207,7 @@ class PaymentExternalSystemAdapterImpl(
                     if (attempt == 1) {
                         logger.warn("[$accountName] Submitting payment request for payment $paymentId")
 
-                        eventQueue.send {
+                        eventQueue.trySend {
                             // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
                             // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
                             paymentESService.update(paymentId) {
@@ -247,7 +238,7 @@ class PaymentExternalSystemAdapterImpl(
                             "[$accountName] Payment processed for txId: $transactionId, payment: $paymentId, " +
                                     "succeeded: ${body.result}, message: ${body.message} (attempt $attempt)"
                         )
-                        eventQueue.send {
+                        eventQueue.trySend {
                             paymentESService.update(paymentId) {
                                 it.logProcessing(body.result, now(), transactionId, reason = body.message)
                             }
@@ -288,7 +279,7 @@ class PaymentExternalSystemAdapterImpl(
                             "[$accountName] Payment failed for txId: $transactionId, " +
                                     "payment: $paymentId, error: ${callResult.reason} (attempt $attempt)"
                         )
-                        eventQueue.send {
+                        eventQueue.trySend {
                             paymentESService.update(paymentId) {
                                 it.logProcessing(false, now(), transactionId, reason = callResult.reason)
                             }
@@ -302,7 +293,7 @@ class PaymentExternalSystemAdapterImpl(
             }
 
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId - retries exhausted")
-            eventQueue.send {
+            eventQueue.trySend {
                 paymentESService.update(paymentId) {
                     it.logProcessing(false, now(), transactionId, reason = "Retries exhausted")
                 }
@@ -310,7 +301,7 @@ class PaymentExternalSystemAdapterImpl(
             metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
         } catch (e: Exception) {
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId", e)
-            eventQueue.send {
+            eventQueue.trySend {
                 paymentESService.update(paymentId) {
                     it.logProcessing(false, now(), transactionId, reason = e.message)
                 }
@@ -366,7 +357,7 @@ class PaymentExternalSystemAdapterImpl(
     ): Boolean {
         if (now() + expectedProcessingTime.inWholeMilliseconds + delayMillis > deadline) {
             logger.warn("[$accountName] Not waiting retry for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
-            eventQueue.send {
+            eventQueue.trySend {
                 paymentESService.update(paymentId) {
                     it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
                 }
