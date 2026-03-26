@@ -62,7 +62,7 @@ class PaymentExternalSystemAdapterImpl(
             parallelRequests / requestAverageProcessingTime.toKotlinDuration().toDouble(DurationUnit.SECONDS)
         )
 
-    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(48) as ThreadPoolExecutor
+    private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(128) as ThreadPoolExecutor
     private val paymentDispatcher =
         paymentExecutor.asCoroutineDispatcher()
     private val paymentScope =
@@ -96,7 +96,7 @@ class PaymentExternalSystemAdapterImpl(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val client = HttpClient(Java) {
         engine {
-            dispatcher = Dispatchers.IO.limitedParallelism(16)
+            dispatcher = Dispatchers.IO.limitedParallelism(128)
             pipelining = true
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
@@ -117,7 +117,7 @@ class PaymentExternalSystemAdapterImpl(
                 }
             }
         }
-        repeat(16) {
+        repeat(64) {
             eventScope.launch {
                 for (task in eventQueue) {
                     task()
