@@ -104,7 +104,7 @@ class PaymentExternalSystemAdapterImpl(
             if (accountOptions.timeoutEnabled != false) {
                 requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
             }
-            connectTimeoutMillis = 1000
+//            connectTimeoutMillis = 1000
         }
 
     }
