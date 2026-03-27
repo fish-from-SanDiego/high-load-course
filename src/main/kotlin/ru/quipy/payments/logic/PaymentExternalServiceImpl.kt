@@ -36,7 +36,7 @@ import kotlin.time.toKotlinDuration
 // Advice: always treat time as a Duration
 class PaymentExternalSystemAdapterImpl(
     private val properties: PaymentAccountProperties,
-    private val paymentESService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>,
+//    private val paymentESService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>,
     private val metricsService: PaymentMetricsService,
     private val paymentProviderHostPort: String,
     private val token: String,
@@ -196,11 +196,11 @@ class PaymentExternalSystemAdapterImpl(
                 val callResult = try {
                     if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
                         logger.warn("[$accountName] Not attempting request for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
-                        eventQueue.trySend {
-                            paymentESService.update(paymentId) {
-                                it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
-                            }
-                        }
+//                        eventQueue.trySend {
+//                            paymentESService.update(paymentId) {
+//                                it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
+//                            }
+//                        }
                         metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
                         return
                     }
@@ -216,14 +216,14 @@ class PaymentExternalSystemAdapterImpl(
                         eventQueue.trySend {
                             // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
                             // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
-                            paymentESService.update(paymentId) {
-                                it.logSubmission(
-                                    success = true,
-                                    transactionId,
-                                    now(),
-                                    Duration.ofMillis(now() - paymentStartedAt)
-                                )
-                            }
+//                            paymentESService.update(paymentId) {
+//                                it.logSubmission(
+//                                    success = true,
+//                                    transactionId,
+//                                    now(),
+//                                    Duration.ofMillis(now() - paymentStartedAt)
+//                                )
+//                            }
                         }
                         metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
 
@@ -244,11 +244,11 @@ class PaymentExternalSystemAdapterImpl(
                             "[$accountName] Payment processed for txId: $transactionId, payment: $paymentId, " +
                                     "succeeded: ${body.result}, message: ${body.message} (attempt $attempt)"
                         )
-                        eventQueue.trySend {
-                            paymentESService.update(paymentId) {
-                                it.logProcessing(body.result, now(), transactionId, reason = body.message)
-                            }
-                        }
+//                        eventQueue.trySend {
+//                            paymentESService.update(paymentId) {
+//                                it.logProcessing(body.result, now(), transactionId, reason = body.message)
+//                            }
+//                        }
                         metricsService.increaseProcessedPaymentRequestCounter(
                             if (body.result == false)
                                 "FAIL - ${body.message}"
@@ -285,11 +285,11 @@ class PaymentExternalSystemAdapterImpl(
                             "[$accountName] Payment failed for txId: $transactionId, " +
                                     "payment: $paymentId, error: ${callResult.reason} (attempt $attempt)"
                         )
-                        eventQueue.trySend {
-                            paymentESService.update(paymentId) {
-                                it.logProcessing(false, now(), transactionId, reason = callResult.reason)
-                            }
-                        }
+//                        eventQueue.trySend {
+//                            paymentESService.update(paymentId) {
+//                                it.logProcessing(false, now(), transactionId, reason = callResult.reason)
+//                            }
+//                        }
                         metricsService.increaseProcessedPaymentRequestCounter(
                             "FAIL - ${callResult.reason}"
                         )
@@ -299,19 +299,19 @@ class PaymentExternalSystemAdapterImpl(
             }
 
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId - retries exhausted")
-            eventQueue.trySend {
-                paymentESService.update(paymentId) {
-                    it.logProcessing(false, now(), transactionId, reason = "Retries exhausted")
-                }
-            }
+//            eventQueue.trySend {
+//                paymentESService.update(paymentId) {
+//                    it.logProcessing(false, now(), transactionId, reason = "Retries exhausted")
+//                }
+//            }
             metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
         } catch (e: Exception) {
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId", e)
-            eventQueue.trySend {
-                paymentESService.update(paymentId) {
-                    it.logProcessing(false, now(), transactionId, reason = e.message)
-                }
-            }
+//            eventQueue.trySend {
+//                paymentESService.update(paymentId) {
+//                    it.logProcessing(false, now(), transactionId, reason = e.message)
+//                }
+//            }
             metricsService.increaseProcessedPaymentRequestCounter(
                 "FAIL - ${e.message}"
             )
@@ -363,11 +363,11 @@ class PaymentExternalSystemAdapterImpl(
     ): Boolean {
         if (now() + expectedProcessingTime.inWholeMilliseconds + delayMillis > deadline) {
             logger.warn("[$accountName] Not waiting retry for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
-            eventQueue.trySend {
-                paymentESService.update(paymentId) {
-                    it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
-                }
-            }
+//            eventQueue.trySend {
+//                paymentESService.update(paymentId) {
+//                    it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
+//                }
+//            }
             metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
             return false
         }
@@ -379,19 +379,19 @@ class PaymentExternalSystemAdapterImpl(
 
     private fun logTooManyRequests(transactionId: UUID, paymentId: UUID, paymentStartedAt: Long) {
         logger.warn("[$accountName] Payment not submitted for txId: $transactionId, payment: $paymentId, reason: Too many requests")
-        eventQueue.trySend {
-            paymentESService.update(paymentId) {
-                it.logSubmission(
-                    success = false,
-                    transactionId,
-                    now(),
-                    Duration.ofMillis(now() - paymentStartedAt)
-                )
-            }
-            paymentESService.update(paymentId) {
-                it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients")
-            }
-        }
+//        eventQueue.trySend {
+//            paymentESService.update(paymentId) {
+//                it.logSubmission(
+//                    success = false,
+//                    transactionId,
+//                    now(),
+//                    Duration.ofMillis(now() - paymentStartedAt)
+//                )
+//            }
+//            paymentESService.update(paymentId) {
+//                it.logProcessing(false, now(), transactionId, reason = "Too many requests from clients")
+//            }
+//        }
 
 
         metricsService.increaseSubmittedPaymentRequestCounter("FAIL")
