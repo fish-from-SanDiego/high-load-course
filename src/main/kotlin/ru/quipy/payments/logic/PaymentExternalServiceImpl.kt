@@ -77,13 +77,13 @@ class PaymentExternalSystemAdapterImpl(
         CoroutineScope(SupervisorJob() + eventDispatcher)
 
     private val queueCapacity = 50_000
-    private val paymentQueue =
-        CountingChannel<suspend () -> Unit>(
-            Channel<suspend () -> Unit>(
-                capacity = queueCapacity,
-                onBufferOverflow = BufferOverflow.SUSPEND
-            )
-        )
+//    private val paymentQueue =
+//        CountingChannel<suspend () -> Unit>(
+//            Channel<suspend () -> Unit>(
+//                capacity = queueCapacity,
+//                onBufferOverflow = BufferOverflow.SUSPEND
+//            )
+//        )
 
     private val eventQueue =
         CountingChannel<suspend () -> Unit>(
@@ -96,27 +96,28 @@ class PaymentExternalSystemAdapterImpl(
     @OptIn(ExperimentalCoroutinesApi::class)
     private val client = HttpClient(Java) {
         engine {
-            dispatcher = Dispatchers.IO.limitedParallelism(128)
-            pipelining = true
+            dispatcher = Dispatchers.IO
             protocolVersion = java.net.http.HttpClient.Version.HTTP_2
         }
-//        true or null
-        if (accountOptions.timeoutEnabled != false) {
-            install(HttpTimeout) {
+        install(HttpTimeout) {
+            //        true or null
+            if (accountOptions.timeoutEnabled != false) {
                 requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
             }
+            connectTimeoutMillis = 1000
         }
+
     }
 
 
     init {
-        repeat(parallelRequests) {
-            paymentScope.launch {
-                for (task in paymentQueue) {
-                    task()
-                }
-            }
-        }
+//        repeat(parallelRequests) {
+//            paymentScope.launch {
+//                for (task in paymentQueue) {
+//                    task()
+//                }
+//            }
+//        }
         repeat(2000) {
             eventScope.launch {
                 for (task in eventQueue) {
@@ -142,7 +143,7 @@ class PaymentExternalSystemAdapterImpl(
     private val maxRequestAttempts = 5
 
     init {
-        metricsService.registerChannelGauges(paymentQueue, "payment_queue", accountName)
+//        metricsService.registerChannelGauges(paymentQueue, "payment_queue", accountName)
         metricsService.registerChannelGauges(eventQueue, "event_queue", accountName)
         metricsService.registerExecutorGauges(paymentExecutor, "payment_executor", accountName)
         metricsService.registerExecutorGauges(eventExecutor, "payment_event_executor", accountName)
@@ -160,16 +161,21 @@ class PaymentExternalSystemAdapterImpl(
             logTooManyRequests(transactionId, paymentId, paymentStartedAt)
             return PaymentSubmissionResult.TooManyRequests(now() + expectedProcessingTime.inWholeMilliseconds)
         }
-        val offered = paymentQueue.trySend {
-            performPaymentTask(paymentId, amount, paymentStartedAt, transactionId, deadline)
-        }.isSuccess
 
-        if (!offered) {
-            logTooManyRequests(transactionId, paymentId, paymentStartedAt)
-            return PaymentSubmissionResult.TooManyRequests(
-                now() + (queueCapacity / expectedRps * 1000).toLong()
-            )
+        paymentScope.launch {
+            performPaymentTask(paymentId, amount, paymentStartedAt, transactionId, deadline)
         }
+
+//        val offered = paymentQueue.trySend {
+//            performPaymentTask(paymentId, amount, paymentStartedAt, transactionId, deadline)
+//        }.isSuccess
+
+//        if (!offered) {
+//            logTooManyRequests(transactionId, paymentId, paymentStartedAt)
+//            return PaymentSubmissionResult.TooManyRequests(
+//                now() + (queueCapacity / expectedRps * 1000).toLong()
+//            )
+//        }
 
         return PaymentSubmissionResult.Success(paymentStartedAt)
     }
