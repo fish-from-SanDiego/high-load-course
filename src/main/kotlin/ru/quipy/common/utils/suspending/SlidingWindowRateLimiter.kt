@@ -11,6 +11,7 @@ import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.PriorityBlockingQueue
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.random.Random
 
 class SlidingWindowRateLimiter(
     private val rate: Long,
@@ -34,7 +35,7 @@ class SlidingWindowRateLimiter(
 
     suspend fun tickSuspending() {
         while (!tick()) {
-            delay(10L)
+            delay(Random.nextLong(10, 21))
         }
     }
 

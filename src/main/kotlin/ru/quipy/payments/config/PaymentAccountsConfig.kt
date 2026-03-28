@@ -54,6 +54,9 @@ class PaymentAccountsConfig {
     @Value("#{\${payment.account-base-retry-delay-map}}")
     val baseRetryDelayTimeMillisByAccount: Map<String, Int> = mapOf()
 
+    @Value("#{\${payment.account-timeout-enabled-map}}")
+    val timeoutEnabledByAccount: Map<String, Boolean> = mapOf()
+
     @Bean
     fun accountAdapters(paymentService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>): List<PaymentExternalSystemAdapter> {
         val request = HttpRequest.newBuilder()
@@ -74,7 +77,7 @@ class PaymentAccountsConfig {
             .map {
                 PaymentExternalSystemAdapterImpl(
                     it,
-                    paymentService,
+//                    paymentService,
                     metricsService,
                     paymentProviderHostPort,
                     token,
@@ -82,6 +85,7 @@ class PaymentAccountsConfig {
                         leakingBucketSizeByAccount.get(it.accountName),
                         expectedProcessingTimeMillisByAccount.get(it.accountName)?.milliseconds,
                         baseRetryDelayTimeMillisByAccount.get(it.accountName)?.milliseconds,
+                        timeoutEnabledByAccount.get(it.accountName)
                     )
                 )
             }
@@ -90,6 +94,7 @@ class PaymentAccountsConfig {
     public data class AccountOptions(
         val incomingRateLimiterBucketSize: Int?,
         val expectedProcessingTime: Duration?,
-        val baseRetryDelay: Duration?
+        val baseRetryDelay: Duration?,
+        val timeoutEnabled: Boolean?
     )
 }

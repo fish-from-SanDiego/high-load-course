@@ -68,7 +68,7 @@ class APIController {
     }
 
     @PostMapping("/orders/{orderId}/payment")
-    fun payOrder(
+    suspend fun payOrder(
         @PathVariable orderId: UUID,
         @RequestParam deadline: Long,
         request: HttpServletRequest,
