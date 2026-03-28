@@ -26,6 +26,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
+import ru.quipy.common.utils.FixedTimeRetryStrategy
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.Executors
@@ -140,10 +141,10 @@ class PaymentExternalSystemAdapterImpl(
     )
     private val ongoingRequestsLimiter = OngoingWindow(parallelRequests)
 
-    private val retryDelayStrategy: RetryDelayStrategy = ExponentialBackoffDelayStrategy(
+    private val retryDelayStrategy: RetryDelayStrategy = FixedTimeRetryStrategy(
         accountOptions.baseRetryDelay ?: 100.milliseconds
     )
-    private val maxRequestAttempts = 5
+    private val maxRequestAttempts = 10
     private val hedgeDelay = accountOptions.hedgeDelay
 
     private val cbWaitDurationMs = 5000L
