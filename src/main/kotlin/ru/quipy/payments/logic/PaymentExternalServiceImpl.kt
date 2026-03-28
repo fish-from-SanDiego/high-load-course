@@ -22,6 +22,10 @@ import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
 import ru.quipy.payments.config.PaymentAccountsConfig.AccountOptions
 import ru.quipy.payments.metrics.PaymentMetricsService
+import io.github.resilience4j.circuitbreaker.CircuitBreaker
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.SlidingWindowType
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry
 import java.time.Duration
 import java.util.*
 import java.util.concurrent.Executors
@@ -66,8 +70,7 @@ class PaymentExternalSystemAdapterImpl(
     private val paymentExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(44) as ThreadPoolExecutor
     private val paymentDispatcher =
         paymentExecutor.asCoroutineDispatcher()
-    private val paymentScope =
-        CoroutineScope(SupervisorJob() + paymentDispatcher)
+    private val paymentScope = CoroutineScope(SupervisorJob() + paymentDispatcher)
 
     private val eventExecutor: ThreadPoolExecutor = Executors.newFixedThreadPool(24) as ThreadPoolExecutor
     private val eventDispatcher =
@@ -142,6 +145,21 @@ class PaymentExternalSystemAdapterImpl(
     )
     private val maxRequestAttempts = 5
     private val hedgeDelay = accountOptions.hedgeDelay
+
+    private val cbWaitDurationMs = 5000L
+    private val circuitBreaker: CircuitBreaker = run {
+        val cbConfig = CircuitBreakerConfig.custom()
+            .slidingWindowType(SlidingWindowType.TIME_BASED)
+            .slidingWindowSize(1)
+            .failureRateThreshold(50f)
+            .slowCallRateThreshold(50f)
+            .slowCallDurationThreshold(Duration.ofMillis(expectedProcessingTime.inWholeMilliseconds))
+            .waitDurationInOpenState(Duration.ofMillis(cbWaitDurationMs))
+            .permittedNumberOfCallsInHalfOpenState(3)
+            .minimumNumberOfCalls(10)
+            .build()
+        CircuitBreakerRegistry.of(cbConfig).circuitBreaker(accountName)
+    }
 
     init {
         metricsService.registerChannelGauges(paymentQueue, "payment_queue", accountName)
@@ -225,13 +243,36 @@ class PaymentExternalSystemAdapterImpl(
                 metricsService.increaseSentPaymentRequestCounter(accountName)
 
                 scope.launch {
+                    while (!circuitBreaker.tryAcquirePermission()) {
+                        if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
+                            logger.warn("[$accountName] CB is OPEN, deadline would be exceeded for txId: $transactionId (attempt $attempt)")
+                            results.send(attempt to PaymentCallResult.FinalFailure("Circuit breaker OPEN, deadline exceeded"))
+                            return@launch
+                        }
+                        logger.info("[$accountName] CB is OPEN, waiting for txId: $transactionId (attempt $attempt)")
+                        delay(100L)
+                    }
+
                     ongoingRequestsLimiter.acquire()
                     try {
                         val requestStartMillis = now()
                         outgoingRateLimiter.tickSuspending()
                         val callResult = executeOnce(requestUrl, transactionId)
+                        val durationMs = now() - requestStartMillis
                         metricsService.requestDurationTimer(accountName)
-                            .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
+                            .record(durationMs, TimeUnit.MILLISECONDS)
+
+                        when (callResult) {
+                            is PaymentCallResult.Success ->
+                                circuitBreaker.onSuccess(durationMs, TimeUnit.MILLISECONDS)
+                            is PaymentCallResult.RetryableFailure ->
+                                circuitBreaker.onError(durationMs, TimeUnit.MILLISECONDS, RuntimeException(callResult.reason))
+                            is PaymentCallResult.RetryableAfterFailure ->
+                                circuitBreaker.onError(durationMs, TimeUnit.MILLISECONDS, RuntimeException(callResult.reason))
+                            is PaymentCallResult.FinalFailure ->
+                                circuitBreaker.onError(durationMs, TimeUnit.MILLISECONDS, RuntimeException(callResult.reason))
+                        }
+
                         results.send(attempt to callResult)
                     } finally {
                         ongoingRequestsLimiter.release()
