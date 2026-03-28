@@ -36,7 +36,7 @@ import kotlin.time.toKotlinDuration
 // Advice: always treat time as a Duration
 class PaymentExternalSystemAdapterImpl(
     private val properties: PaymentAccountProperties,
-//    private val paymentESService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>,
+    private val paymentESService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>,
     private val metricsService: PaymentMetricsService,
     private val paymentProviderHostPort: String,
     private val token: String,
@@ -104,7 +104,6 @@ class PaymentExternalSystemAdapterImpl(
             if (accountOptions.timeoutEnabled != false) {
                 requestTimeoutMillis = expectedProcessingTime.inWholeMilliseconds
             }
-//            connectTimeoutMillis = 1000
         }
 
     }
