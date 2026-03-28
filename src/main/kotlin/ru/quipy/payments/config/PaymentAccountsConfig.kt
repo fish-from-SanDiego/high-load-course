@@ -57,6 +57,9 @@ class PaymentAccountsConfig {
     @Value("#{\${payment.account-timeout-enabled-map}}")
     val timeoutEnabledByAccount: Map<String, Boolean> = mapOf()
 
+    @Value("#{\${payment.account-hedge-delay-map}}")
+    val hedgeDelayMillisByAccount: Map<String, Int> = mapOf()
+
     @Bean
     fun accountAdapters(paymentService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>): List<PaymentExternalSystemAdapter> {
         val request = HttpRequest.newBuilder()
@@ -77,7 +80,7 @@ class PaymentAccountsConfig {
             .map {
                 PaymentExternalSystemAdapterImpl(
                     it,
-//                    paymentService,
+                    paymentService,
                     metricsService,
                     paymentProviderHostPort,
                     token,
@@ -85,7 +88,8 @@ class PaymentAccountsConfig {
                         leakingBucketSizeByAccount.get(it.accountName),
                         expectedProcessingTimeMillisByAccount.get(it.accountName)?.milliseconds,
                         baseRetryDelayTimeMillisByAccount.get(it.accountName)?.milliseconds,
-                        timeoutEnabledByAccount.get(it.accountName)
+                        timeoutEnabledByAccount.get(it.accountName),
+                        hedgeDelayMillisByAccount.get(it.accountName)?.milliseconds
                     )
                 )
             }
@@ -95,6 +99,7 @@ class PaymentAccountsConfig {
         val incomingRateLimiterBucketSize: Int?,
         val expectedProcessingTime: Duration?,
         val baseRetryDelay: Duration?,
-        val timeoutEnabled: Boolean?
+        val timeoutEnabled: Boolean?,
+        val hedgeDelay: Duration? = null
     )
 }
