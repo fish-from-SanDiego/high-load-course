@@ -27,6 +27,7 @@ import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.min
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
@@ -140,6 +141,7 @@ class PaymentExternalSystemAdapterImpl(
         accountOptions.baseRetryDelay ?: 100.milliseconds
     )
     private val maxRequestAttempts = 5
+    private val hedgeDelay = accountOptions.hedgeDelay
 
     init {
         metricsService.registerChannelGauges(paymentQueue, "payment_queue", accountName)
@@ -190,137 +192,147 @@ class PaymentExternalSystemAdapterImpl(
             val requestUrl =
                 "http://$paymentProviderHostPort/external/process?serviceName=$serviceName&token=$token&accountName=$accountName&transactionId=$transactionId&paymentId=$paymentId&amount=$amount"
 
-            for (attempt in 1..maxRequestAttempts) {
-                ongoingRequestsLimiter.acquire()
-                val callResult = try {
-                    if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
-                        logger.warn("[$accountName] Not attempting request for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
-//                        eventQueue.trySend {
-//                            paymentESService.update(paymentId) {
-//                                it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
-//                            }
-//                        }
-                        metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
-                        return
-                    }
+            if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) {
+                logger.warn("[$accountName] Not attempting request for txId: $transactionId, payment: $paymentId; deadline would be exceeded")
+                metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
+                return
+            }
 
-                    metricsService.increaseSentPaymentRequestCounter(accountName)
-                    if (attempt != 1) {
-                        metricsService.increasePaymentRequestRetriesCounter(accountName)
-                    }
+            logger.warn("[$accountName] Submitting payment request for payment $paymentId")
+            eventQueue.trySend {
+//                paymentESService.update(paymentId) {
+//                    it.logSubmission(
+//                        success = true,
+//                        transactionId,
+//                        now(),
+//                        Duration.ofMillis(now() - paymentStartedAt)
+//                    )
+//                }
+            }
+            metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
+            logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
 
-                    if (attempt == 1) {
-                        logger.warn("[$accountName] Submitting payment request for payment $paymentId")
+            val results = Channel<Pair<Int, PaymentCallResult>>(Channel.UNLIMITED)
+            val attemptsUsed = AtomicInteger(0)
+            val activeJobs = AtomicInteger(0)
 
-                        eventQueue.trySend {
-                            // Вне зависимости от исхода оплаты важно отметить что она была отправлена.
-                            // Это требуется сделать ВО ВСЕХ СЛУЧАЯХ, поскольку эта информация используется сервисом тестирования.
-//                            paymentESService.update(paymentId) {
-//                                it.logSubmission(
-//                                    success = true,
-//                                    transactionId,
-//                                    now(),
-//                                    Duration.ofMillis(now() - paymentStartedAt)
-//                                )
-//                            }
-                        }
-                        metricsService.increaseSubmittedPaymentRequestCounter("SUCCESS")
-
-                        logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
-                    }
-                    val requestStartMillis = now()
-                    val callResult = executeOnce(requestUrl)
-                    metricsService.requestDurationTimer(accountName)
-                        .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
-                    callResult
-                } finally {
-                    ongoingRequestsLimiter.release()
+            fun launchAttempt(scope: CoroutineScope) {
+                val attempt = attemptsUsed.incrementAndGet()
+                activeJobs.incrementAndGet()
+                if (attempt > 1) {
+                    metricsService.increasePaymentRequestRetriesCounter(accountName)
                 }
-                when (callResult) {
-                    is PaymentCallResult.Success -> {
-                        val body = callResult.response
-                        logger.warn(
-                            "[$accountName] Payment processed for txId: $transactionId, payment: $paymentId, " +
-                                    "succeeded: ${body.result}, message: ${body.message} (attempt $attempt)"
-                        )
-//                        eventQueue.trySend {
-//                            paymentESService.update(paymentId) {
-//                                it.logProcessing(body.result, now(), transactionId, reason = body.message)
-//                            }
-//                        }
-                        metricsService.increaseProcessedPaymentRequestCounter(
-                            if (body.result == false)
-                                "FAIL - ${body.message}"
-                            else
-                                "SUCCESS"
-                        )
-                        return
-                    }
+                metricsService.increaseSentPaymentRequestCounter(accountName)
 
-                    is PaymentCallResult.RetryableAfterFailure -> {
-                        val delay = (callResult.timestamp - now()).coerceAtLeast(0L)
-                        logger.warn(
-                            "[$accountName] Payment failed for txId: $transactionId, " +
-                                    "payment: $paymentId, error: ${callResult.reason} (attempt $attempt); retrying"
-                        )
-                        if (attempt < maxRequestAttempts) {
-                            if (!waitBeforeRetry(paymentId, transactionId, attempt, delay, deadline)) return
-                        }
-                    }
-
-                    is PaymentCallResult.RetryableFailure -> {
-                        val delay = retryDelayStrategy.delayMillis(attempt)
-                        logger.warn(
-                            "[$accountName] Payment failed for txId: $transactionId, " +
-                                    "payment: $paymentId, error: ${callResult.reason} (attempt $attempt); retrying"
-                        )
-                        if (attempt < maxRequestAttempts) {
-                            if (!waitBeforeRetry(paymentId, transactionId, attempt, delay, deadline)) return
-                        }
-                    }
-
-                    is PaymentCallResult.FinalFailure -> {
-                        logger.error(
-                            "[$accountName] Payment failed for txId: $transactionId, " +
-                                    "payment: $paymentId, error: ${callResult.reason} (attempt $attempt)"
-                        )
-//                        eventQueue.trySend {
-//                            paymentESService.update(paymentId) {
-//                                it.logProcessing(false, now(), transactionId, reason = callResult.reason)
-//                            }
-//                        }
-                        metricsService.increaseProcessedPaymentRequestCounter(
-                            "FAIL - ${callResult.reason}"
-                        )
-                        return
+                scope.launch {
+                    ongoingRequestsLimiter.acquire()
+                    try {
+                        val requestStartMillis = now()
+                        outgoingRateLimiter.tickSuspending()
+                        val callResult = executeOnce(requestUrl, transactionId)
+                        metricsService.requestDurationTimer(accountName)
+                            .record((now() - requestStartMillis), TimeUnit.MILLISECONDS)
+                        results.send(attempt to callResult)
+                    } finally {
+                        ongoingRequestsLimiter.release()
                     }
                 }
             }
 
-            logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId - retries exhausted")
-//            eventQueue.trySend {
-//                paymentESService.update(paymentId) {
-//                    it.logProcessing(false, now(), transactionId, reason = "Retries exhausted")
-//                }
-//            }
-            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
+            supervisorScope {
+                launchAttempt(this)
+
+                val hedgeJob = if (hedgeDelay != null) {
+                    launch {
+                        while (attemptsUsed.get() < maxRequestAttempts) {
+                            delay(hedgeDelay.inWholeMilliseconds)
+                            if (now() + expectedProcessingTime.inWholeMilliseconds > deadline) break
+                            if (attemptsUsed.get() >= maxRequestAttempts) break
+                            logger.info("[$accountName] Launching hedge attempt ${attemptsUsed.get() + 1} for txId: $transactionId, payment: $paymentId")
+                            launchAttempt(this@supervisorScope)
+                        }
+                    }
+                } else null
+
+                var lastFailureReason: String? = null
+
+                while (activeJobs.get() > 0) {
+                    val (attempt, callResult) = results.receive()
+                    activeJobs.decrementAndGet()
+
+                    when (callResult) {
+                        is PaymentCallResult.Success -> {
+                            val body = callResult.response
+                            logger.warn(
+                                "[$accountName] Payment processed for txId: $transactionId, payment: $paymentId, " +
+                                        "succeeded: ${body.result}, message: ${body.message} (attempt $attempt)"
+                            )
+                            metricsService.increaseProcessedPaymentRequestCounter(
+                                if (body.result == false) "FAIL - ${body.message}" else "SUCCESS"
+                            )
+                            hedgeJob?.cancel()
+                            this@supervisorScope.coroutineContext.cancelChildren()
+                            return@supervisorScope
+                        }
+
+                        is PaymentCallResult.FinalFailure -> {
+                            logger.error(
+                                "[$accountName] Payment failed for txId: $transactionId, " +
+                                        "payment: $paymentId, error: ${callResult.reason} (attempt $attempt)"
+                            )
+                            metricsService.increaseProcessedPaymentRequestCounter("FAIL - ${callResult.reason}")
+                            hedgeJob?.cancel()
+                            this@supervisorScope.coroutineContext.cancelChildren()
+                            return@supervisorScope
+                        }
+
+                        is PaymentCallResult.RetryableAfterFailure -> {
+                            lastFailureReason = callResult.reason
+                            logger.warn(
+                                "[$accountName] Payment failed for txId: $transactionId, " +
+                                        "payment: $paymentId, error: ${callResult.reason} (attempt $attempt); retryable"
+                            )
+                            if (attemptsUsed.get() < maxRequestAttempts && activeJobs.get() == 0) {
+                                val retryDelay = (callResult.timestamp - now()).coerceAtLeast(0L)
+                                if (now() + expectedProcessingTime.inWholeMilliseconds + retryDelay <= deadline) {
+                                    if (retryDelay > 0) delay(retryDelay)
+                                    launchAttempt(this@supervisorScope)
+                                }
+                            }
+                        }
+
+                        is PaymentCallResult.RetryableFailure -> {
+                            lastFailureReason = callResult.reason
+                            logger.warn(
+                                "[$accountName] Payment failed for txId: $transactionId, " +
+                                        "payment: $paymentId, error: ${callResult.reason} (attempt $attempt); retryable"
+                            )
+                            if (attemptsUsed.get() < maxRequestAttempts && activeJobs.get() == 0) {
+                                val retryDelay = retryDelayStrategy.delayMillis(attempt)
+                                if (now() + expectedProcessingTime.inWholeMilliseconds + retryDelay <= deadline) {
+                                    if (retryDelay > 0) delay(retryDelay)
+                                    launchAttempt(this@supervisorScope)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                hedgeJob?.cancel()
+                logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId - retries exhausted (last error: $lastFailureReason)")
+                metricsService.increaseProcessedPaymentRequestCounter("FAIL - Retries exhausted")
+            }
         } catch (e: Exception) {
             logger.error("[$accountName] Payment failed for txId: $transactionId, payment: $paymentId", e)
-//            eventQueue.trySend {
-//                paymentESService.update(paymentId) {
-//                    it.logProcessing(false, now(), transactionId, reason = e.message)
-//                }
-//            }
-            metricsService.increaseProcessedPaymentRequestCounter(
-                "FAIL - ${e.message}"
-            )
+            metricsService.increaseProcessedPaymentRequestCounter("FAIL - ${e.message}")
         }
     }
 
-    private suspend fun executeOnce(requestUrl: String): PaymentCallResult {
+    private suspend fun executeOnce(requestUrl: String, idempotencyKey: UUID): PaymentCallResult {
         return try {
-            outgoingRateLimiter.tickSuspending()
-            val response = client.post(requestUrl)
+            val response = client.post(requestUrl) {
+                headers.append("x-idempotency-key", idempotencyKey.toString())
+            }
             response.headers["Retry-After"]?.let {
                 return try {
                     PaymentCallResult.RetryableAfterFailure(it.toLong(), "HTTP ${response.status.value}")
@@ -353,27 +365,6 @@ class PaymentExternalSystemAdapterImpl(
     }
 
 
-    private suspend fun waitBeforeRetry(
-        paymentId: UUID,
-        transactionId: UUID,
-        attempt: Int,
-        delayMillis: Long,
-        deadline: Long
-    ): Boolean {
-        if (now() + expectedProcessingTime.inWholeMilliseconds + delayMillis > deadline) {
-            logger.warn("[$accountName] Not waiting retry for txId: $transactionId, payment: $paymentId; deadline would be exceeded (attempt $attempt)")
-//            eventQueue.trySend {
-//                paymentESService.update(paymentId) {
-//                    it.logProcessing(false, now(), transactionId, reason = "Deadline exceeded.")
-//                }
-//            }
-            metricsService.increaseProcessedPaymentRequestCounter("FAIL - Deadline exceeded")
-            return false
-        }
-
-        if (delayMillis > 0) delay(delayMillis)
-        return true
-    }
 
 
     private fun logTooManyRequests(transactionId: UUID, paymentId: UUID, paymentStartedAt: Long) {
