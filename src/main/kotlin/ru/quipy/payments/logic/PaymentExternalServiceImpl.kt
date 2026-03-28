@@ -144,10 +144,9 @@ class PaymentExternalSystemAdapterImpl(
     private val retryDelayStrategy: RetryDelayStrategy = FixedTimeRetryStrategy(
         accountOptions.baseRetryDelay ?: 100.milliseconds
     )
-    private val maxRequestAttempts = 10
+    private val maxRequestAttempts = 1000
     private val hedgeDelay = accountOptions.hedgeDelay
 
-    private val cbWaitDurationMs = 5000L
     private val circuitBreaker: CircuitBreaker = run {
         val cbConfig = CircuitBreakerConfig.custom()
             .slidingWindowType(SlidingWindowType.TIME_BASED)
@@ -155,7 +154,7 @@ class PaymentExternalSystemAdapterImpl(
             .failureRateThreshold(50f)
             .slowCallRateThreshold(50f)
             .slowCallDurationThreshold(Duration.ofMillis(expectedProcessingTime.inWholeMilliseconds))
-            .waitDurationInOpenState(Duration.ofMillis(cbWaitDurationMs))
+            .waitDurationInOpenState(Duration.ofSeconds(5))
             .permittedNumberOfCallsInHalfOpenState(3)
             .minimumNumberOfCalls(10)
             .build()
